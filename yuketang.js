@@ -84,6 +84,13 @@
       const el = document.querySelector(containerSelector);
       if (el) el.scrollTop = el.scrollHeight;
     },
+    // 进度键归一化：只用 站点+路径+课堂id，丢掉 query。
+    // 否则 URL 上 query 参数一变（tab=content / content_url= 等）就会落到另一个
+    // 进度键上，表现为进度回退、重复刷同一集（issue #8）。
+    progressKey() {
+      const classroomId = this.getCurrentClassroomId();
+      return `${location.origin}${location.pathname}${classroomId ? '#' + classroomId : ''}`;
+    },
     getCurrentClassroomId() {
       const query = new URLSearchParams(location.search);
       const queryId = query.get('classroom_id');
@@ -1348,7 +1355,7 @@ ${ocrText}
   class V2Runner {
     constructor(panel) {
       this.panel = panel;
-      this.baseUrl = location.href;
+      this.baseUrl = Utils.progressKey();
       const { current } = Store.getProgress(this.baseUrl);
       this.outside = current.outside;
       this.inside = current.inside;
