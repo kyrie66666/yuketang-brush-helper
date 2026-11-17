@@ -2630,68 +2630,40 @@ ${ocrText}
     }
 
 
-    // ---- 考试（quiz）----
+    // ---- 考试（quiz）：人工辅助模式 ----
+    // 实测（2026.11）：
+    //   - 考试项在 /ai-workspace/lms-graph/<cid>/quiz/<leafId>，内容在 iframe.quiz-iframe
+    //   - 未开始时是「考生须知」页，题目一个都不加载，点「开始答题」才真正开始
+    //   - 点「开始答题」会**在新标签页**打开独立考试系统 examination.xuetangx.com
+    //     （不是 yuketang.cn，脚本的 @match 不覆盖；页面内还嵌了腾讯验证码）
+    //   - 因此脚本无法在考试页自动作答，这里只做「识别 + 可选地帮你打开考试系统」，
+    //     真正的作答与交卷由人工完成。
     async handleQuiz(route) {
       const title = AiWorkspace.getActiveLeafTitle() || `考试 ${route.leafId}`;
       const doc = await Utils.poll(() => AiWorkspace.getQuizDocument(), { interval: 500, timeout: 20000 })
         ? AiWorkspace.getQuizDocument() : null;
       if (!doc) {
-        this.panel.log('未找到考试 iframe，跳过');
+        this.panel.log(`${title}：未找到考试 iframe，跳过`);
         return true;
       }
 
       const startBtn = AiWorkspace.getQuizStartButton(doc);
-      if (startBtn) {
-        if (!AiWorkspace.examModeOn()) {
-          this.panel.log(`${title} 停在考生须知页，未自动开始（需开启 ykt_exam_mode=on）`);
-          await Utils.sleep(1000);
-          return true;
-        }
-        this.panel.log(`${title} 开始答题...`);
-        startBtn.click();
-        await Utils.sleep(4000);
-      }
-
-      // 进入作答后循环处理题目
-      const featureFlags = Store.getFeatureConf();
-      if (!featureFlags.autoAI) {
-        this.panel.log('已关闭 AI 自动答题，考试已开始但不会作答');
+      if (!startBtn) {
+        this.panel.log(`${title}：似乎已在作答中，脚本不介入（请人工完成并交卷）`);
         return true;
       }
 
-      const maxQuestion = 40;
-      for (let i = 0; i < maxQuestion; i++) {
-        const currentDoc = AiWorkspace.getQuizDocument();
-        if (!currentDoc) break;
-        const body = AiWorkspace.getExerciseQuestionBody(currentDoc);
-        if (!body) {
-          this.panel.log('未找到题目容器，结束作答');
-          break;
-        }
-        const fingerprint = AiWorkspace.normalizeText(body.innerText).slice(0, 120);
-        this.panel.log(`第 ${i + 1} 题：${fingerprint.slice(0, 24)}...`);
-        await this.solveExerciseQuestion(currentDoc, `第 ${i + 1} 题`);
-
-        const nextBtn = AiWorkspace.getExerciseActionButton(currentDoc, /下一题|下一道|下一步/);
-        if (nextBtn) {
-          nextBtn.click();
-          await Utils.sleep(1200);
-          continue;
-        }
-        // 没有「下一题」说明是最后一题，尝试交卷
-        const submitBtn = AiWorkspace.getExerciseActionButton(currentDoc, /交卷|提交试卷|提交/);
-        if (submitBtn) {
-          this.panel.log('全部题目已作答，正在交卷...');
-          submitBtn.click();
-          await Utils.sleep(2000);
-          // 交卷可能有二次确认
-          const confirmBtn = AiWorkspace.getExerciseActionButton(currentDoc, /确定|确认/);
-          if (confirmBtn) { confirmBtn.click(); await Utils.sleep(1500); }
-        }
-        break;
+      if (!AiWorkspace.examModeOn()) {
+        this.panel.log(`${title}：停在考生须知页，未开始（开启 ykt_exam_mode=on 可自动打开考试系统）`);
+        await Utils.sleep(800);
+        return true;
       }
 
-      this.panel.log('考试处理结束');
+      // 只负责把考试系统打开，不作答
+      this.panel.log(`${title}：正在打开考试系统…`);
+      startBtn.click();
+      await Utils.sleep(1500);
+      this.panel.warn('考试系统已在新标签页打开，请人工作答并交卷（脚本不参与答题）');
       return true;
     }
 
