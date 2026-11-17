@@ -42,13 +42,46 @@
   时长用尽或到截止时间会自动交卷。
 - 因为不限时，即使误点「开始」，也可以在截止前从容继续作答。
 
-## 如果你想让脚本将来支持考试
+## 补充：关于"能不能自动作答题"（2026.11 实测结论）
+
+在实际完成 12 场考试后，结论要修正得更精确：
+
+- **题目是可以自动作答的**，但**不能由 userscript 完成**。
+- 原因：考试选项是 Element UI 的 `label.el-radio` / `label.el-checkbox`，
+  用合成事件 `element.click()` **无法稳定改变选中状态**（实测：10 个选项里只有最后点的那个生效，
+  因为 Vue 的受控状态只认受信任事件）。
+  只有 **CDP `Input.dispatchMouseEvent` 派发的受信任事件**才能正确勾选。
+  而浏览器里的 userscript 无法产生 `isTrusted: true` 的事件。
+- 因此本项目不做考试自动作答；如果将来要做，必须借助外部自动化（CDP/Puppeteer/Playwright），
+  而不是油猴脚本。
+
+### 实测得到的关键结构（供将来参考）
+
+| 环节 | 选择器 / 事实 |
+|---|---|
+| 考试列表项 | `#icon-kaoshi`，Vue `$props.tableData.content.leaf_id` / `leaf_type_id` |
+| 雨课堂侧入口 | `/ai-workspace/lms-graph/<cid>/quiz/<leafId>`，内容在 `iframe.quiz-iframe` |
+| 须知页 | 有「开始答题」；已开始时显示「继续答题」 |
+| 考试系统 | `https://examination.xuetangx.com/start/<leafTypeId>` → 点「开始」→ `/exam/<leafTypeId>` |
+| 题目容器 | `.item-body`（每题一个），题干在 `h4` |
+| 选项 | `ul.list-unstyled-radio` / `ul.list-unstyled-checkbox`，`label` 内 `input.value` = A/B/C/D… |
+| 填空题 | `input[type=text]`（**精确匹配判分，猜错为 0**） |
+| 交卷 | `.el-button.tosubmit` → 确认弹窗 `.el-message-box__btns` 里的「交卷」 |
+| 结果页 | `/result/<id>`，可读到「本题得分」「正确答案」 |
+| 限制 | 同一账号**同时只能开一个考试页**，否则跳 `/warn` |
+
+### 实测成绩（同一账号 12 场）
+
+客观题（单选/多选/判断）几乎全对；**填空题 10 题全错**，因为答案需要精确文字，
+靠推断无法命中。这印证了：客观题可自动化，填空/主观题不可靠。
+
+
 
 需要先解决上面的三点。可行的推进顺序：
 
-1. 先给脚本加 `@match *://examination.xuetangx.com/*`
+1. 给外部自动化加 `examination.xuetangx.com` 的访问（CDP/Playwright，而非油猴）
 2. 用**你愿意牺牲的一场考试**换取一次进入作答界面的机会，把题目 DOM 结构记录下来
-3. 基于真实 DOM 实现「读题 → OCR/AI → 选项 → 下一题 → 交卷」，并像 `test/` 里那样写 fixture 回归测试
+3. 基于真实 DOM 实现「读题 → OCR/AI → 选项 → 填入 → 交卷」，并像 `test/` 里那样写 fixture 回归测试
 4. 验证通过后再默认关闭、按需开启
 
 在没走完这套之前，建议保持人工作答。
