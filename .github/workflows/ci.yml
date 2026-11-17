@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: 语法与测试文件校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 校验用户脚本语法
+        run: node --check yuketang.user.js
+
+      - name: 校验测试与工具脚本语法
+        run: |
+          for f in test/run-fixtures.mjs tools/*.mjs; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
+      - name: 校验 userscript 元数据
+        run: |
+          head -n 30 yuketang.user.js | grep -q '@name' || { echo "缺少 @name"; exit 1; }
+          head -n 30 yuketang.user.js | grep -q '@version' || { echo "缺少 @version"; exit 1; }
+          head -n 30 yuketang.user.js | grep -q '@match' || { echo "缺少 @match"; exit 1; }
+          echo "元数据完整"
+
+      - name: 校验脚本版本与 CHANGELOG 一致
+        run: |
+          VER=$(grep -oP "@version\s+\K[0-9.]+" yuketang.user.js)
+          echo "脚本版本: $VER"
+          grep -q "## \[$VER\]" CHANGELOG.md || { echo "CHANGELOG.md 缺少 $VER 的条目"; exit 1; }
+          echo "版本号与 CHANGELOG 一致"

@@ -11,7 +11,7 @@
 > 雨课堂已把课程内容整体迁移到 `/ai-workspace/lms-graph/...` 路由，旧版选择器基本失效。
 > 本版完成重新适配，并实测跑完一门包含 293 个学习单元的课程
 > （116 图文 + 43 视频 + 134 讨论，最终 293/293 全部完成）。
-> 改动明细见 [releaseLog.md](releaseLog.md)。
+> 改动明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![界面截图](images/image.png)
 
@@ -173,12 +173,15 @@ A：不会。进度按「站点 + 路径 + 课堂 id」记录，多窗口之间�
 ## 目录结构
 
 ```
-yuketang.user.js   用户脚本本体（唯一需要安装的文件）
-docs/exam.md       考试系统的实测结论与 DOM 结构
-tools/             外部自动化工具（可选）
-test/              fixture 回归测试
-releaseLog.md      版本更新记录
-images/            截图
+yuketang.user.js        用户脚本本体（唯一需要安装的文件）
+CHANGELOG.md            版本更新记录
+CONTRIBUTING.md         贡献指南
+LICENSE                 GPL-3.0
+docs/exam.md            考试系统的实测结论与 DOM 结构
+tools/                  外部自动化工具（可选）
+test/                   fixture 回归测试
+images/                 截图
+.github/                Issue / PR 模板与 CI
 ```
 
 ## 开发与测试
@@ -193,6 +196,18 @@ node test/run-fixtures.mjs --port 9222
 
 测试用本地 fixture 复刻现网的 forum / video / graph 三种页面结构，通过 CDP 注入脚本并断言行为。
 详见 [test/README.md](test/README.md)。
+
+---
+
+## 参与贡献
+
+欢迎提交 Issue 与 Pull Request。开始之前请看 [CONTRIBUTING.md](CONTRIBUTING.md)，其中说明了：
+
+- Bug 反馈需要提供哪些信息（**请勿粘贴课堂 id、姓名等个人信息**）
+- 提交前必须通过的检查（`node --check` + 回归测试）
+- 代码约定（多写候选选择器、异步流程必须有超时与放弃分支等）
+
+改动记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 

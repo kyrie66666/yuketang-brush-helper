@@ -1,0 +1,85 @@
+name: Bug 反馈
+description: 脚本没有按预期工作
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先确认：
+        - 已阅读 [README 常见问题](https://github.com/kyrie66666/yuketang-jiaoben#常见问题)
+        - 脚本是最新版本（v3.1.0 及以上）
+        - 已尝试点面板上的「重新加载」
+
+        **请勿粘贴课堂 id、姓名、学号等个人信息。**
+
+  - type: input
+    id: version
+    attributes:
+      label: 脚本版本
+      description: 面板标题或 Tampermonkey 里可以看到
+      placeholder: "v3.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 浏览器
+      options:
+        - Chrome / Edge
+        - Firefox
+        - 其它（请在下方说明）
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: 出问题的页面
+      description: 只要路径部分即可，不要带课堂 id
+      placeholder: "例如 /ai-workspace/lms-graph/.../video/..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: 涉及的内容类型
+      multiple: true
+      options:
+        - 视频
+        - 音频
+        - 图文 / PPT
+        - 讨论区
+        - 作业
+        - 面板不显示 / 无法启动
+        - 其它
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象描述
+      description: 你期望发生什么，实际发生了什么
+      placeholder: 例如：视频播完但进度一直停在 99%，不会进入下一节
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 面板日志 / 控制台报错
+      description: 面板里最后几行日志，或 F12 Console 里的红色报错
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已确认以上内容不含个人信息
+          required: true

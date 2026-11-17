@@ -1,0 +1,46 @@
+name: 功能建议
+description: 希望脚本支持新的场景或行为
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认这是一个**通用需求**（对多数用户有意义），而不是只针对某个学校的页面特例。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 描述当前的不便之处，而不是直接说"加个功能"
+      placeholder: 例如：批量区里的音频单元目前不会被处理，需要手动点开
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      description: 可以只描述期望行为，不要求给出实现
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响范围
+      options:
+        - 单个内容类型（视频/图文/讨论/作业等）
+        - 某个页面路由（v2/web、pro/lms、ai-workspace）
+        - 面板交互
+        - 其它
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 截图、页面结构片段（脱敏后）等
+    validations:
+      required: false
