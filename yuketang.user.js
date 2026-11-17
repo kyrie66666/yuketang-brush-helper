@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         雨课堂刷课助手
 // @namespace    http://tampermonkey.net/
-// @version      3.1.0
+// @version      3.2.0
 // @description  针对雨课堂视频进行自动播放，配置AI自动答题
 // @author       风之子
 // @license      GPL3
@@ -32,7 +32,7 @@
 
   // ---- 脚本配置，用户可修改 ----
   const Config = {
-    version: '3.1.0',     // 版本号
+    version: '3.2.0',     // 版本号
     playbackRate: 2,      // 视频播放倍速
     pptInterval: 3000,    // ppt翻页间隔
     storageKeys: {        // 使用者勿动
@@ -81,6 +81,15 @@
     // 主要是规避firefox会创建多个iframe的问题
     inIframe() {
       return window.top !== window.self;
+    },
+    // 是否由「多窗口」按钮创建的工作窗口。
+    // window.name 在同窗口内整页跳转后依然保留，所以内容页也能认出来。
+    isWorkerWindow() {
+      try {
+        return String(window.name || '').startsWith('yktw-');
+      } catch (_) {
+        return false;
+      }
     },
     // 下滑到最底部，触发课程加载
     scrollToBottom(containerSelector) {
@@ -660,6 +669,22 @@
               </div>
               <div id="settings">
                 <div class="form-item">
+                  <label>多窗口并发（各窗口自动分工，不会重复刷同一条）</label>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <select id="multi_count" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                      <option value="2">2 个窗口</option>
+                      <option value="4" selected>4 个窗口</option>
+                      <option value="6">6 个窗口</option>
+                      <option value="8">8 个窗口</option>
+                    </select>
+                    <button id="btn-multi" style="padding:6px 12px;border:none;border-radius:6px;background:#722ed1;color:#fff;cursor:pointer;font-size:12px;">打开窗口</button>
+                  </div>
+                  <div style="font-size:11px;color:#999;margin-top:6px;line-height:16px;">
+                    会在本课程页新开指定数量的窗口并自动开始刷课。窗口请勿最小化、勿被完全遮挡。
+                  </div>
+                </div>
+                <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+                <div class="form-item">
                   <label>API URL:</label>
                   <input type="text" id="ai_url" placeholder="https://api.deepseek.com/chat/completions">
                 </div>
@@ -703,7 +728,7 @@
                 </div>
               </div>
               <div class="footer">
-                <button id="btn-setting">AI配置</button>
+                <button id="btn-setting">设置</button>
                 <button id="btn-clear">清除缓存</button>
                 <button id="btn-start">开始刷课</button>
                 <button id="btn-stop">停止刷课</button>
@@ -736,7 +761,9 @@
       featureAutoComment: doc.getElementById('feature_auto_comment'),
       minimality: doc.getElementById('minimality'),
       question: doc.getElementById('question'),
-      miniBasic: doc.getElementById('mini-basic')
+      miniBasic: doc.getElementById('mini-basic'),
+      multiCount: doc.getElementById('multi_count'),
+      btnMulti: doc.getElementById('btn-multi')
     };
 
     let isDragging = false;
@@ -860,6 +887,42 @@
       Store.setFeatureConf(featureConf);
       ui.settings.style.display = 'none';
       log('✅ AI 配置已保存');
+    };
+
+    // 多窗口并发：新开 N 个窗口，每个窗口的脚本会用 window.name 识别自己是 worker 并自动开刷
+    ui.btnMulti.onclick = () => {
+      const hostWin = window.parent || window;
+      const count = Number(ui.multiCount.value) || 4;
+      const url = hostWin.location.href;
+      const sw = hostWin.screen?.availWidth || 1280;
+      const sh = hostWin.screen?.availHeight || 800;
+      const cols = count <= 2 ? 2 : count <= 4 ? 2 : 3;
+      const rows = Math.ceil(count / cols);
+      const w = Math.max(520, Math.floor(sw / cols));
+      const h = Math.max(400, Math.floor(sh / rows));
+
+      let opened = 0;
+      for (let i = 0; i < count; i += 1) {
+        const left = (i % cols) * w;
+        const top = Math.floor(i / cols) * h;
+        const name = `yktw-${Date.now()}-${i}`;
+        let win = null;
+        try {
+          win = hostWin.open(url, name,
+            `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`);
+        } catch (_) {
+          win = null;
+        }
+        if (win) opened += 1;
+      }
+
+      if (!opened) {
+        warn('浏览器拦截了新窗口，请允许本页面弹出窗口后重试');
+        return;
+      }
+      log(`已打开 ${opened} 个窗口，它们会自动开始并分工刷课`);
+      if (opened < count) warn(`只成功打开 ${opened}/${count} 个，可能是弹窗被拦截`);
+      ui.settings.style.display = 'none';
     };
 
     ui.btnClear.onclick = () => {
@@ -2304,8 +2367,10 @@ ${ocrText}
       const normalize = url => String(url || '').split('#')[0];
       const isSameUrl = Boolean(target) && normalize(location.href) === normalize(target);
 
-      // 1) 内容页是用新标签页打开的：交回父窗口并关闭自己
-      const sourceWindow = this.getSourceWindow();
+      // 1) 内容页是用新标签页打开的：交回父窗口并关闭自己。
+      //    但多窗口 worker 也带 opener，不能走这条分支 —— 否则会把主窗口跳走，
+      //    所以 worker 一律按「同标签页返回」处理。
+      const sourceWindow = Utils.isWorkerWindow() ? null : this.getSourceWindow();
       if (sourceWindow && sourceWindow !== window) {
         try {
           sourceWindow.location.href = target;
@@ -2773,6 +2838,14 @@ ${ocrText}
       panel.setStartHandler(start);
       const pendingAutoStart = Store.getPendingAutoStart();
       const currentClassroomId = Utils.getCurrentClassroomId();
+
+      // 多窗口 worker：由「打开窗口」按钮创建，进来就自动开刷
+      if (Utils.isWorkerWindow()) {
+        panel.log(`多窗口工作窗口已就绪（${window.name.slice(0, 4)}…），自动开始`);
+        setTimeout(() => panel.start(), 1000);
+        return;
+      }
+
       if (
         pendingAutoStart
         && Utils.isSupportedLearningPage()

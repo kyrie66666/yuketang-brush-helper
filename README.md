@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml/badge.svg)](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-3.1.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-3.2.0-blue.svg)](CHANGELOG.md)
 
 一个面向[雨课堂](https://www.yuketang.cn)的用户脚本（Userscript）：自动播放课程视频/音频、
 翻阅图文与课件、自动回复讨论，可选接入大模型自动做作业。
 
-- **版本**：v3.1.0（适配 2026.11 改版）
+- **版本**：v3.2.0（适配 2026.11 改版）
 - **许可证**：[GPL-3.0](LICENSE)
 - **适用**：Tampermonkey / Violentmonkey 等脚本管理器（Chrome、Edge、Firefox）
 - **下载**：[Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest)
@@ -26,7 +26,7 @@
 - [许可证](#许可证)
 - [免责声明](#免责声明)
 
-> **v3.1.0 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
+> **v3.2.0 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
 > （116 图文 + 43 视频 + 134 讨论，293/293 全部完成）。改动明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![界面截图](images/image.png)
@@ -115,33 +115,24 @@
 
 ### 3. 多窗口并发（可选，显著提速）
 
-单窗口刷课时视频是一节一节串行的。**多个窗口可以同时各刷一节**，脚本会自动分工，
-不会两个窗口抢同一个条目。
+单窗口刷课时视频是一节一节串行的。**多个窗口可以同时各刷一节**，脚本自动分工，不会两个窗口抢同一条目。
 
-#### 手动方式
+**用法**：点面板「设置」→「多窗口并发」→ 选窗口数量 → 点「打开窗口」。
 
-1. 打开 **2–4 个浏览器窗口**（注意是窗口，不是同一窗口下的多个标签页）
-2. 每个窗口都打开**同一门课的「学习日志 / 目录」页**
-3. 每个窗口各点一次「开始刷课」
-4. 把窗口**平铺在屏幕上**，不要最小化，也尽量不要让某个窗口被完全遮住
+脚本会按屏幕大小平铺打开对应数量的窗口，**每个窗口自动开始刷课**。
 
-之后各窗口各刷各的，进度会分别记录。
+注意：
 
-> **为什么不能用标签页**：浏览器会限制后台标签页里的视频播放，同一窗口里只有当前那个标签能正常跑。
+- 窗口**不要最小化**，也尽量不要让某个窗口被完全遮住（被遮住的窗口里视频可能被浏览器暂停）
+- 首次使用若提示"窗口被浏览器拦截"，允许本站弹窗后重试
 
-#### 自动方式（更省事，窗口也能开更多）
-
-`tools/brush.mjs` 用浏览器调试接口自动开窗口、平铺并启动，比手动更稳：
-
-```bash
-node tools/brush.mjs --course <课堂id> --windows 4 --minutes 30
-```
-
-这种方式需要以调试模式启动浏览器（这样还能顺带关掉浏览器的后台节流），
-完整前置条件见 [tools/README.md](tools/README.md)。
+> **为什么用窗口而不是标签页**：浏览器会限制后台标签页里的视频播放，同一窗口里只有当前那个标签能正常跑。
 
 > 实测 8 个窗口可以同时以 2 倍速播放不同视频。窗口数越多越快，但视频并发会分摊带宽，
 > 一般 4–8 个比较合适。
+
+需要更强的并发（用调试模式启动浏览器、顺带关掉后台节流）可以用命令行工具
+`tools/brush.mjs`，见 [tools/README.md](tools/README.md)。
 
 #### 两个开关
 
