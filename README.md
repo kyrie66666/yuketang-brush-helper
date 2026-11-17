@@ -105,4 +105,17 @@
 + tfia              增加了对 Anthropic 格式 API 和相应认证方式的支持，并增加选项供用户选择
 + xinyangcui        修复了面板增加停止刷课BUG、添加重新加载按钮
 
+### 许可证
+
+本项目采用 **GNU General Public License v3.0（GPLv3）**，全文见 [LICENSE](LICENSE)。
+
+- 原始脚本作者：风之子（[Niuwh/yuketang-jiaoben](https://github.com/Niuwh/yuketang-jiaoben)）
+- 本仓库在原始脚本基础上做了 2026.11 改版适配、多窗口并发、回归测试与 `tools/` 外部自动化工具
+
+简单说：你可以自由使用、修改、分发本项目；但如果分发修改后的版本，
+**必须同样以 GPLv3 开源并提供源码**，并保留原有版权声明。
+
+> 许可证只规定代码的复制与再分发权利，**不构成对使用行为的任何豁免** ——
+> 使用脚本时仍需自行遵守所在平台的服务条款与学校的学术规定。
+
 如有任何问题或提议，欢迎大家访问我的网站：[https://niuwh.cn](https://niuwh.cn) ,里面有我的联系方式。或者博客留言：[https://blog.niuwh.cn](https://blog.niuwh.cn)。
