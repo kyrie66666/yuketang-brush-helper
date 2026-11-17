@@ -1245,6 +1245,31 @@
       element.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     },
+    // ---- 考试（quiz）：新版 ai-workspace 路由 ----
+    // 结构：/ai-workspace/lms-graph/<cid>/quiz/<leafId>
+    //   → iframe.quiz-iframe src=/v2/web/iframe-quiz/<cid>/<leafTypeId>
+    //   → 未开始时是「考生须知」页，有「开始答题」按钮（.btn-quiz），题目一个都不加载
+    //   → 点了「开始答题」才算开始（会消耗一次作答机会）
+    // 默认只识别不开始；需要 localStorage 设 ykt_exam_mode=on 才会自动开始作答。
+    getQuizDocument() {
+      const frame = document.querySelector('iframe.quiz-iframe')
+        || [...document.querySelectorAll('iframe')].find(f => /iframe-quiz/.test(f.src || ''));
+      if (!frame) return null;
+      try {
+        const doc = frame.contentDocument;
+        return doc && doc.body ? doc : null;
+      } catch (_) {
+        return null;
+      }
+    },
+    getQuizStartButton(doc) {
+      if (!doc) return null;
+      const nodes = [...doc.querySelectorAll('.btn-quiz, .btn__group, button, [role="button"]')];
+      return nodes.find(el => /开始答题/.test((el.innerText || '').trim())) || null;
+    },
+    examModeOn() {
+      try { return localStorage.getItem('ykt_exam_mode') === 'on'; } catch (_) { return false; }
+    },
     getAllScourse() { // 获得ai-workspace的课程列表
       const list = document?.querySelectorAll(".nav-item-leaf-box")
       if (!list) panel.warn("没有发现课程资源")
@@ -2356,12 +2381,45 @@ ${ocrText}
           resolveEnded(true);
         };
         media.addEventListener('ended', onEnded);
+
+        // 站点会按服务端记录校正播放位置：实测有视频播到 935/950 后被拉回 12 秒重播。
+        // 原来的超时是 3× 视频时长（一个 15 分钟视频要占住窗口 45 分钟），
+        // 这里加「位置回拉」和「播放停滞」检测，及时放弃，让窗口去刷别的。
+        let aborted = false;
+        let lastPos = Number(media.currentTime || 0);
+        let lastAdvanceAt = Date.now();
+        let pullBackCount = 0;
+
         const done = await Promise.race([
           endedPromise,
           Utils.poll(() => {
             if (playbackState.completed) return true;
             const currentMedia = AiWorkspace.getMedia();
             if (currentMedia) media = currentMedia;
+            if (!media) return false;
+            const cur = Number(media.currentTime || 0);
+
+            if (cur < lastPos - 30) {
+              pullBackCount++;
+              this.panel.log(`播放位置被回拉 ${Math.round(lastPos)}→${Math.round(cur)}（第 ${pullBackCount} 次）`);
+              lastPos = cur;
+              lastAdvanceAt = Date.now();
+              if (pullBackCount >= 2) {
+                this.panel.log('位置反复被回拉，放弃该视频');
+                aborted = true;
+                return true;
+              }
+              return false;
+            }
+            if (cur > lastPos + 0.5) {
+              lastPos = cur;
+              lastAdvanceAt = Date.now();
+            } else if (Date.now() - lastAdvanceAt > 120000) {
+              this.panel.log('播放停滞超过 2 分钟，放弃该视频');
+              aborted = true;
+              return true;
+            }
+
             if (AiWorkspace.isPlayerDone(media, { startTime, minPlayedDelta: 3 })) {
               playbackState.completed = true;
               return true;
@@ -2369,6 +2427,11 @@ ${ocrText}
             return false;
           }, { interval: 1000, timeout: await Utils.getDDL() })
         ]);
+        media.removeEventListener('ended', onEnded);
+        if (aborted) {
+          playbackState.completed = true;
+          return false;
+        }
         // 即使轮询先判定“接近结尾”，也必须等到播放器真正触发 ended 再离开，
         // 否则服务端只记录到 98%/99%，该节永远刷不满。
         if (done && !media.ended) {
@@ -2566,8 +2629,78 @@ ${ocrText}
       return submitted;
     }
 
+
+    // ---- 考试（quiz）----
+    async handleQuiz(route) {
+      const title = AiWorkspace.getActiveLeafTitle() || `考试 ${route.leafId}`;
+      const doc = await Utils.poll(() => AiWorkspace.getQuizDocument(), { interval: 500, timeout: 20000 })
+        ? AiWorkspace.getQuizDocument() : null;
+      if (!doc) {
+        this.panel.log('未找到考试 iframe，跳过');
+        return true;
+      }
+
+      const startBtn = AiWorkspace.getQuizStartButton(doc);
+      if (startBtn) {
+        if (!AiWorkspace.examModeOn()) {
+          this.panel.log(`${title} 停在考生须知页，未自动开始（需开启 ykt_exam_mode=on）`);
+          await Utils.sleep(1000);
+          return true;
+        }
+        this.panel.log(`${title} 开始答题...`);
+        startBtn.click();
+        await Utils.sleep(4000);
+      }
+
+      // 进入作答后循环处理题目
+      const featureFlags = Store.getFeatureConf();
+      if (!featureFlags.autoAI) {
+        this.panel.log('已关闭 AI 自动答题，考试已开始但不会作答');
+        return true;
+      }
+
+      const maxQuestion = 40;
+      for (let i = 0; i < maxQuestion; i++) {
+        const currentDoc = AiWorkspace.getQuizDocument();
+        if (!currentDoc) break;
+        const body = AiWorkspace.getExerciseQuestionBody(currentDoc);
+        if (!body) {
+          this.panel.log('未找到题目容器，结束作答');
+          break;
+        }
+        const fingerprint = AiWorkspace.normalizeText(body.innerText).slice(0, 120);
+        this.panel.log(`第 ${i + 1} 题：${fingerprint.slice(0, 24)}...`);
+        await this.solveExerciseQuestion(currentDoc, `第 ${i + 1} 题`);
+
+        const nextBtn = AiWorkspace.getExerciseActionButton(currentDoc, /下一题|下一道|下一步/);
+        if (nextBtn) {
+          nextBtn.click();
+          await Utils.sleep(1200);
+          continue;
+        }
+        // 没有「下一题」说明是最后一题，尝试交卷
+        const submitBtn = AiWorkspace.getExerciseActionButton(currentDoc, /交卷|提交试卷|提交/);
+        if (submitBtn) {
+          this.panel.log('全部题目已作答，正在交卷...');
+          submitBtn.click();
+          await Utils.sleep(2000);
+          // 交卷可能有二次确认
+          const confirmBtn = AiWorkspace.getExerciseActionButton(currentDoc, /确定|确认/);
+          if (confirmBtn) { confirmBtn.click(); await Utils.sleep(1500); }
+        }
+        break;
+      }
+
+      this.panel.log('考试处理结束');
+      return true;
+    }
+
     // 直接在ai-workspace页面处理课程的逻辑
     async handleNext(count) {
+      if (!this.source || !this.source.length) {
+        this.panel.log('未取到课程目录，停止当前轮次');
+        return;
+      }
       if (count >= this.source.length) {
         this.panel.log('课程刷完啦 🎉');
         this.panel.resetStartButton('刷完啦~');
@@ -2596,6 +2729,8 @@ ${ocrText}
         ok = await this.handleMedia(route);
       } else if (route.type === 'forum') {
         ok = await this.handleForum(route);
+      } else if (route.type === 'quiz') {
+        ok = await this.handleQuiz(route);
       } else if (route.type === 'exercise') {
         ok = await this.handleExercise(route);
       } else {
