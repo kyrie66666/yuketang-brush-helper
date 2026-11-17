@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         雨课堂刷课助手
 // @namespace    http://tampermonkey.net/
-// @version      3.0.8
+// @version      3.1.0
 // @description  针对雨课堂视频进行自动播放，配置AI自动答题
 // @author       风之子
 // @license      GPL3
@@ -30,7 +30,7 @@
 
   // ---- 脚本配置，用户可修改 ----
   const Config = {
-    version: '3.0.8',     // 版本号
+    version: '3.1.0',     // 版本号
     playbackRate: 2,      // 视频播放倍速
     pptInterval: 3000,    // ppt翻页间隔
     storageKeys: {        // 使用者勿动
@@ -38,7 +38,8 @@
       ai: 'ykt_ai_conf',
       proClassCount: 'pro_lms_classCount',
       feature: 'ykt_feature_conf', // 是否开启AI作答/自动评论
-      pendingAutoStart: 'ykt_pending_auto_start'
+      pendingAutoStart: 'ykt_pending_auto_start',
+      claims: 'ykt_claim_queue'   // 多标签并发认领队列
     }
   };
 
@@ -123,6 +124,19 @@
         const raw = leaf?.learningSpaceUrl || '';
         if (!raw) return '';
         return raw.replace('/lms-graph-mobile/', '/lms-graph/');
+      } catch (_) {
+        return '';
+      }
+    },
+    // 叶子项的唯一标识（并发认领用）：优先用组件上的 leaf.id，退化用 URL 最后一段
+    getLeafKey(item) {
+      try {
+        const vm = item?.__vue__;
+        const leaf = vm?.$props?.leaf || vm?.leafData || null;
+        if (leaf && leaf.id != null) return String(leaf.id);
+        const url = this.getLeafLearningUrl(item);
+        const m = url.match(/\/([^/?#]+)(?:\?|$)/);
+        return m ? m[1] : '';
       } catch (_) {
         return '';
       }
@@ -270,12 +284,40 @@
     setFeatureConf(conf) {
       localStorage.setItem(Config.storageKeys.feature, JSON.stringify(conf));
     },
+    // ---- 多标签并发：标签身份 ----
+    // sessionStorage 按标签页隔离、且在同标签整页跳转后保留，正好用来区分并发标签。
+    getTabId() {
+      try {
+        let id = sessionStorage.getItem('ykt_tab_id');
+        if (!id) {
+          id = 'tab-' + Math.random().toString(36).slice(2, 9);
+          sessionStorage.setItem('ykt_tab_id', id);
+        }
+        return id;
+      } catch (_) {
+        return 'tab-shared';
+      }
+    },
+    // pendingAutoStart 必须按标签隔离，否则并发标签会互相覆盖"该回到哪个目录页"
+    pendingKey() {
+      return `${Config.storageKeys.pendingAutoStart}:${this.getTabId()}`;
+    },
     getPendingAutoStart() {
-      const raw = localStorage.getItem(Config.storageKeys.pendingAutoStart);
+      const key = this.pendingKey();
+      let raw = localStorage.getItem(key);
+      if (!raw) {
+        // 兼容旧版单键存储：迁移到当前标签作用域，避免升级后丢状态
+        const legacy = localStorage.getItem(Config.storageKeys.pendingAutoStart);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(key, legacy);
+          localStorage.removeItem(Config.storageKeys.pendingAutoStart);
+        }
+      }
       const saved = Utils.safeJSONParse(raw, null);
       if (!saved || !saved.classroomId || !saved.ts) return null;
       if (Date.now() - saved.ts > 30 * 60 * 1000) {
-        localStorage.removeItem(Config.storageKeys.pendingAutoStart);
+        localStorage.removeItem(this.pendingKey());
         return null;
       }
       return saved;
@@ -283,14 +325,76 @@
     setPendingAutoStart(classroomId = '', returnUrl = '') {
       if (!classroomId) return;
       const prev = this.getPendingAutoStart() || {};
-      localStorage.setItem(Config.storageKeys.pendingAutoStart, JSON.stringify({
+      localStorage.setItem(this.pendingKey(), JSON.stringify({
         classroomId,
         returnUrl: returnUrl || prev.returnUrl || '',
         ts: Date.now()
       }));
     },
     clearPendingAutoStart() {
-      localStorage.removeItem(Config.storageKeys.pendingAutoStart);
+      localStorage.removeItem(this.pendingKey());
+    },
+
+    // ---- 多标签并发：认领队列 ----
+    // 结构 { [classroomId]: { [leafKey]: { owner, ts } } }
+    // 租约 15 分钟：超过视为原标签已失效（关闭/崩溃），允许其它标签重新认领。
+    claimTtl() { return 15 * 60 * 1000; },
+    getClaims(classroomId) {
+      const raw = localStorage.getItem(Config.storageKeys.claims);
+      const all = Utils.safeJSONParse(raw, {}) || {};
+      return { all, current: all[classroomId] || {} };
+    },
+    isClaimedByOther(classroomId, leafKey) {
+      const { current } = this.getClaims(classroomId);
+      const claim = current[leafKey];
+      if (!claim) return false;
+      if (claim.owner === this.getTabId()) return false;
+      if (Date.now() - claim.ts > this.claimTtl()) return false;
+      return true;
+    },
+    // 认领并复核。localStorage 没有原子写，两个标签可能各自"写完再读"都看到自己，
+    // 所以写完后等待一个随机窗口让并发写落地，再复核一次：后写者胜出，先写者主动让位。
+    async claimItem(classroomId, leafKey) {
+      const owner = this.getTabId();
+      const { all, current } = this.getClaims(classroomId);
+      current[leafKey] = { owner, ts: Date.now() };
+      all[classroomId] = current;
+      localStorage.setItem(Config.storageKeys.claims, JSON.stringify(all));
+      await Utils.sleep(250 + Math.floor(Math.random() * 300));
+      const verify = this.getClaims(classroomId).current[leafKey];
+      return Boolean(verify && verify.owner === owner);
+    },
+    releaseClaim(classroomId, leafKey) {
+      const { all, current } = this.getClaims(classroomId);
+      if (current[leafKey] && current[leafKey].owner === this.getTabId()) {
+        delete current[leafKey];
+        all[classroomId] = current;
+        localStorage.setItem(Config.storageKeys.claims, JSON.stringify(all));
+      }
+    },
+
+    // ---- 已尝试记忆 ----
+    // 认领只防「别的标签」，不防自己：某个条目若始终刷不成功（例如视频元素加载失败、
+    // duration 恒为 0），本标签会反复认领同一条。用 sessionStorage 记住本标签试过的
+    // 条目，10 分钟内不再重试，把机会让给其它标签或之后的轮次。
+    attemptKey() { return 'ykt_attempted:' + this.getTabId(); },
+    markAttempted(leafKey) {
+      if (!leafKey) return;
+      try {
+        const map = Utils.safeJSONParse(sessionStorage.getItem(this.attemptKey()), {}) || {};
+        map[leafKey] = Date.now();
+        sessionStorage.setItem(this.attemptKey(), JSON.stringify(map));
+      } catch (_) {}
+    },
+    hasAttempted(leafKey, ttl = 10 * 60 * 1000) {
+      if (!leafKey) return false;
+      try {
+        const map = Utils.safeJSONParse(sessionStorage.getItem(this.attemptKey()), {}) || {};
+        const ts = map[leafKey];
+        return Boolean(ts) && Date.now() - ts < ttl;
+      } catch (_) {
+        return false;
+      }
     },
   };
 
@@ -1592,63 +1696,106 @@ ${ocrText}
         }
       }
       const activities = readActivities();
-      let idx = this.inside;
-      this.panel.log(`进入批量区，内部进度 ${idx}/${activities.length}`);
-      while (idx < activities.length) {
-        const item = activities[idx];
-        if (!item) break;
+      // ---- 多标签并发：从整章里认领一个「未完成 + 未被其它标签占用」的条目 ----
+      const classroomId = Utils.getCurrentClassroomId() || 'unknown';
+      const statusOf = el => {
+        const box = el.querySelector('.statistics-box .aside');
+        return { box, text: box?.innerText || '' };
+      };
 
-        const tagText = item.querySelector('.tag')?.innerText || '';
-        const tagHref = item.querySelector('.tag')?.querySelector('use')?.getAttribute('xlink:href') || '';
-        const title = item.querySelector('h2')?.innerText || `第${idx + 1}项`;
+      let picked = -1;
+      let incompleteCount = 0;
+      let videoIncompleteCount = 0;
+      // 模式开关（localStorage 'ykt_mode'）：
+      //   'fast' = 只处理图文/讨论这类秒级条目，跳过视频
+      //   'all'（默认）= 全部
+      // 实测多标签并发时，图文/讨论能线性提速，但视频会互相抢带宽从而严重降速
+      // （4 路并发时单个视频只跑到 0.08 倍速），所以视频应该串行。
+      const mode = (() => { try { return localStorage.getItem('ykt_mode') || 'all'; } catch (_) { return 'all'; } })();
+      const iconOf = el => String(el.querySelector('.tag use')?.getAttribute('xlink:href') || '').toLowerCase();
 
-        // 检查当前项目的完成状态
-        const statusBox = item.querySelector('.statistics-box .aside');
-        const statusText = statusBox?.innerText || '';
-        const isCompleted = this.checkCompletionStatus(statusBox, statusText);
-
-        if (isCompleted) {
-          this.panel.log(`✅ ${title} 已完成，跳过`);
-          idx++;
-          this.updateProgress(this.outside, idx);
-          continue;
+      for (let pass = 0; pass < 2 && picked < 0; pass++) {
+        for (let i = 0; i < activities.length; i++) {
+          const el = activities[i];
+          const { box, text } = statusOf(el);
+          if (this.checkCompletionStatus(box, text)) continue;
+          const icon = iconOf(el);
+          const isVid = icon.includes('shipin') || icon.includes('yinpin') || icon.includes('audio');
+          if (pass === 0) {
+            incompleteCount++;
+            if (isVid) videoIncompleteCount++;
+          }
+          if (mode === 'fast' && isVid) continue;
+          // 快项优先：第一遍只挑非视频，第二遍才挑视频
+          if (pass === 0 && isVid) continue;
+          const key = Utils.getLeafKey(el) || `idx-${i}`;
+          if (Store.isClaimedByOther(classroomId, key)) continue;
+          if (Store.hasAttempted(key)) continue;
+          if (!(await Store.claimItem(classroomId, key))) continue;
+          Store.markAttempted(key);
+          picked = i;
+          break;
         }
+      }
 
-        // 新版雨课堂点击内容项会整页跳转到 ai-workspace，本函数之后不会再执行，
-        // 所以必须在点击前把进度落盘；否则回到目录页会从同一项重新开始（死循环）。
-        this.updateProgress(this.outside, idx + 1);
-
-        // 新版 .tag 里只有 <svg><use>，没有文字，靠 tagText === '音频' 永远匹配不到；
-        // 这里同时接受文字包含和图标名（#icon-yinpin / #icon-audio）两种信号。
-        const tagIcon = String(tagHref || '').toLowerCase();
-        const isAudio = tagText.includes('音频') || tagIcon.includes('yinpin') || tagIcon.includes('audio');
-        const isVideo = tagIcon.includes('shipin') || tagText.includes('视频');
-
-        // 新版列表项自带学习空间地址，直接跳转比点击可靠得多（点击常无反应）
-        const leafUrl = Utils.getLeafLearningUrl(item);
-        if (leafUrl) {
-          this.panel.log(`跳转到内容页：${title}`);
-          location.href = leafUrl;
+      if (picked < 0) {
+        if (incompleteCount === 0) {
+          this.panel.log('本章已全部完成 🎉');
+          this.updateProgress(this.outside + 1, 0);
           return;
         }
-
-        if (isAudio) {
-          idx = await this.playAudioItem(item, title, idx);
-        } else if (isVideo) {
-          idx = await this.playVideoItem(item, title, idx);
-        } else if (tagHref.includes('tuwen') || tagHref.includes('taolun')) {
-          idx = await this.autoCommentItem(item, tagHref.includes('tuwen') ? '图文' : '讨论', idx);
-        } else if (tagHref.includes('zuoye')) {
-          idx = await this.handleHomework(item, idx);
-        } else {
-          this.panel.log(`类型未知，已跳过：${title}`);
-          idx++;
-          this.updateProgress(this.outside, idx);
+        // fast 模式：只剩视频时不要推进章节，留给后面的串行视频阶段
+        if (mode === 'fast' && incompleteCount === videoIncompleteCount) {
+          this.panel.log(`本章只剩 ${videoIncompleteCount} 个视频，留给串行阶段`);
+          await Utils.sleep(15000);
+          return;
         }
-        if (this.shouldStop) return;
+        this.emptyRounds = (this.emptyRounds || 0) + 1;
+        if (this.emptyRounds >= 5) {
+          this.panel.log(`本章剩余 ${incompleteCount} 项暂无可认领（其它标签处理中或需重试），先跳过`);
+          this.emptyRounds = 0;
+          this.updateProgress(this.outside + 1, 0);
+          return;
+        }
+        this.panel.log(`剩余 ${incompleteCount} 项已被其它标签认领或暂不可试，等待中...`);
+        await Utils.sleep(8000);
+        return;
       }
-      this.updateProgress(this.outside + 1, 0);
-      await Utils.sleep(1000);
+      this.emptyRounds = 0;
+
+      const idx = picked;
+      const item = activities[idx];
+      const tagText = item.querySelector('.tag')?.innerText || '';
+      const tagHref = item.querySelector('.tag')?.querySelector('use')?.getAttribute('xlink:href') || '';
+      const title = item.querySelector('h2')?.innerText || `第${idx + 1}项`;
+
+      this.updateProgress(this.outside, idx + 1);
+
+      // 新版列表项自带学习空间地址，直接跳转比点击可靠得多（点击常无反应）
+      const leafUrl = Utils.getLeafLearningUrl(item);
+      if (leafUrl) {
+        this.panel.log(`[${Store.getTabId()}] 认领 ${idx + 1}/${activities.length}：${title}`);
+        location.href = leafUrl;
+        return;
+      }
+
+      // 旧版页面没有 learningSpaceUrl，退回原来的点击式处理
+      const tagIcon = String(tagHref || '').toLowerCase();
+      const isAudio = tagText.includes('音频') || tagIcon.includes('yinpin') || tagIcon.includes('audio');
+      const isVideo = tagIcon.includes('shipin') || tagText.includes('视频');
+
+      if (isAudio) {
+        await this.playAudioItem(item, title, idx);
+      } else if (isVideo) {
+        await this.playVideoItem(item, title, idx);
+      } else if (tagHref.includes('tuwen') || tagHref.includes('taolun')) {
+        await this.autoCommentItem(item, tagHref.includes('tuwen') ? '图文' : '讨论', idx);
+      } else if (tagHref.includes('zuoye')) {
+        await this.handleHomework(item, idx);
+      } else {
+        this.panel.log(`类型未知，已跳过：${title}`);
+        this.updateProgress(this.outside, idx + 1);
+      }
     }
 
     async playAudioItem(item, title, idx) {
@@ -2498,6 +2645,18 @@ ${ocrText}
     if (Utils.inIframe()) return;
     // about:blank 等非 http(s) 页面没有 localStorage 权限，初始化面板会抛 SecurityError
     if (!/^https?:$/.test(location.protocol)) return;
+    // 全局异常兜底：以前有 bug 会让流程静默死掉（面板毫无反应），很难定位。
+    // 这里把未捕获异常和 Promise rejection 直接打到面板上。
+    try {
+      window.addEventListener('error', ev => {
+        try { panel && panel.error(`脚本异常：${ev.message}`); } catch (_) {}
+      });
+      window.addEventListener('unhandledrejection', ev => {
+        const reason = ev?.reason;
+        const msg = reason?.message || String(reason || '未知');
+        try { panel && panel.error(`异步异常：${msg}`); } catch (_) {}
+      });
+    } catch (_) {}
     await Utils.waitForMountTarget();
     try {
       panel = createPanel();
