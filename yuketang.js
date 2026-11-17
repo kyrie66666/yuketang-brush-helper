@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         雨课堂刷课助手
 // @namespace    http://tampermonkey.net/
-// @version      3.0.7
+// @version      3.0.8
 // @description  针对雨课堂视频进行自动播放，配置AI自动答题
 // @author       风之子
 // @license      GPL3
@@ -30,7 +30,7 @@
 
   // ---- 脚本配置，用户可修改 ----
   const Config = {
-    version: '3.0.7',     // 版本号
+    version: '3.0.8',     // 版本号
     playbackRate: 2,      // 视频播放倍速
     pptInterval: 3000,    // ppt翻页间隔
     storageKeys: {        // 使用者勿动
@@ -90,6 +90,42 @@
     progressKey() {
       const classroomId = this.getCurrentClassroomId();
       return `${location.origin}${location.pathname}${classroomId ? '#' + classroomId : ''}`;
+    },
+    // 返回课程目录页。
+    // 不要直接 history.back()：雨课堂从目录进内容页时可能用 replace 语义，
+    // 标签页历史里只剩 [about:blank, 目录页]，裸后退会把整个标签页带回空白页
+    // （实测复现：点击叶子未触发跳转时，autoCommentItem 末尾的 history.back() 直接退到 about:blank）。
+    goBackToList() {
+      const stored = Store.getPendingAutoStart()?.returnUrl || '';
+      const here = String(location.href).split('#')[0];
+      const target = String(stored).split('#')[0];
+      if (target && target !== here) {
+        try { panel && panel.log('返回课程目录页'); } catch (_) {}
+        location.href = stored;
+        return true;
+      }
+      // 没有记录地址时，只有确实存在同源上一页才后退，否则宁可原地不动
+      if (history.length > 1 && document.referrer && document.referrer.startsWith(location.origin)) {
+        history.back();
+        return true;
+      }
+      return false;
+    },
+    // 取叶子项自带的学习空间地址。
+    // 2026.11 新版列表项的 Vue 组件上挂着 leaf.learningSpaceUrl（形如
+    // /ai-workspace/lms-graph-mobile/<cid>/<type>/<leafId>?node_id=0&is_chapter=1）。
+    // 实测：桌面端点列表项经常不触发跳转（点了没反应），但直接访问把 -mobile 去掉
+    // 的地址是可靠的，且 node_id=0 会被站点自动解析成正确节点。
+    getLeafLearningUrl(item) {
+      try {
+        const vm = item?.__vue__;
+        const leaf = vm?.$props?.leaf || vm?.leafData || null;
+        const raw = leaf?.learningSpaceUrl || '';
+        if (!raw) return '';
+        return raw.replace('/lms-graph-mobile/', '/lms-graph/');
+      } catch (_) {
+        return '';
+      }
     },
     getCurrentClassroomId() {
       const query = new URLSearchParams(location.search);
@@ -1424,7 +1460,7 @@ ${ocrText}
         if ((videoBox || document.querySelector('video')) && !boxText.includes('已完成')) {
           this.panel.log('检测到当前课件页，直接续播当前内容');
           await this.waitCoursewareVideo();
-          history.back();
+          Utils.goBackToList();
           await Utils.sleep(1000);
         }
       }
@@ -1476,6 +1512,16 @@ ${ocrText}
         }
 
         this.panel.log(`刷课状态：第 ${this.outside + 1}/${list.length} 个，类型 ${type}，标题：${title}`);
+
+        // 顶层内容项若自带学习空间地址，直接跳转（新版点击常常不触发跳转）
+        const topLeafUrl = Utils.getLeafLearningUrl(course);
+        if (topLeafUrl) {
+          this.panel.log(`跳转到内容页：${title}`);
+          this.updateProgress(this.outside + 1, 0);
+          location.href = topLeafUrl;
+          return;
+        }
+
         if (type.includes('shipin')) {
           await this.handleVideo(course);
         } else if (type.includes('piliang')) {
@@ -1520,7 +1566,7 @@ ${ocrText}
       }, { interval: 5000, timeout: await Utils.getDDL() });
       stopObserve();
       this.updateProgress(this.outside + 1, 0);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1200);
     }
 
@@ -1578,6 +1624,14 @@ ${ocrText}
         const isAudio = tagText.includes('音频') || tagIcon.includes('yinpin') || tagIcon.includes('audio');
         const isVideo = tagIcon.includes('shipin') || tagText.includes('视频');
 
+        // 新版列表项自带学习空间地址，直接跳转比点击可靠得多（点击常无反应）
+        const leafUrl = Utils.getLeafLearningUrl(item);
+        if (leafUrl) {
+          this.panel.log(`跳转到内容页：${title}`);
+          location.href = leafUrl;
+          return;
+        }
+
         if (isAudio) {
           idx = await this.playAudioItem(item, title, idx);
         } else if (isVideo) {
@@ -1611,7 +1665,7 @@ ${ocrText}
       this.panel.log(`${title} 播放完成`);
       idx++;
       this.updateProgress(this.outside, idx);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1500);
       return idx;
     }
@@ -1633,7 +1687,7 @@ ${ocrText}
       this.panel.log(`${title} 播放完成`);
       idx++;
       this.updateProgress(this.outside, idx);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1500);
       return idx;
     }
@@ -1649,7 +1703,7 @@ ${ocrText}
         this.panel.log(`${typeText}已查看，但未开启自动回复功能`);
         idx++;
         this.updateProgress(this.outside, idx);
-        history.back();
+        Utils.goBackToList();
         await Utils.sleep(1000);
         return idx;
       }
@@ -1697,7 +1751,7 @@ ${ocrText}
       }
       idx++;
       this.updateProgress(this.outside, idx);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1000);
       return idx;
     }
@@ -1767,7 +1821,7 @@ ${ocrText}
       }
       idx++;
       this.updateProgress(this.outside, idx);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1200);
       return idx;
     }
@@ -1903,7 +1957,7 @@ ${ocrText}
         }
       }
       this.updateProgress(this.outside + 1, 0);
-      history.back();
+      Utils.goBackToList();
       await Utils.sleep(1000);
     }
   }
@@ -2099,13 +2153,13 @@ ${ocrText}
       }
       if (target && isSameUrl) {
         this.panel.log('已在目录页，使用浏览器后退补齐历史');
-        history.back();
+        Utils.goBackToList();
         return true;
       }
 
       // 3) 拿不到返回地址时退化为浏览器后退
       this.panel.log('未记录目录页地址，尝试浏览器后退');
-      history.back();
+      Utils.goBackToList();
       return false;
     }
 
@@ -2320,6 +2374,9 @@ ${ocrText}
         return true;
       }
 
+      // 评论区是异步加载的：输入框出现时评论往往还没渲染出来，
+      // 直接读会误判为"没有可参考的发言"而跳过（实测自动化流程里 2 秒就走掉了）
+      await Utils.poll(() => AiWorkspace.getForumComments().length > 0, { interval: 500, timeout: 12000 });
       const comments = AiWorkspace.getForumComments();
       this.panel.log(`讨论区已有 ${comments.length} 条发言`);
       if (!comments.length) {
@@ -2439,6 +2496,8 @@ ${ocrText}
   // ---- 启动 ----
   async function boot() {
     if (Utils.inIframe()) return;
+    // about:blank 等非 http(s) 页面没有 localStorage 权限，初始化面板会抛 SecurityError
+    if (!/^https?:$/.test(location.protocol)) return;
     await Utils.waitForMountTarget();
     try {
       panel = createPanel();

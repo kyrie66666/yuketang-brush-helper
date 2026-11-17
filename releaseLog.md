@@ -54,3 +54,7 @@
 + 2026.11.17 3.0.7  修复播放断续：兜底续播间隔 5s → 1.5s，并新增 visibilitychange / focus 续播
 + 2026.11.17 3.0.7  修复音频项识别：新版 .tag 内只有图标没有文字，改为图标名 + 文字双信号判断
 + 2026.11.17 3.0.7  新增 test/ fixture 回归测试（forum / video / graph 三场景，CDP 驱动真实浏览器）
++ 2026.11.17 3.0.8  实测修复：新版列表项点击常不触发跳转，改为读取组件上的 leaf.learningSpaceUrl 直接导航（lms-graph-mobile → lms-graph）
++ 2026.11.17 3.0.8  实测修复：评论区异步加载，原逻辑在输入框出现时就读评论，误判"没有可参考的发言"而跳过发帖；改为轮询等待评论渲染
++ 2026.11.17 3.0.8  实测修复：把裸 history.back() 换成 Utils.goBackToList()，避免标签页历史只剩 [about:blank, 目录页] 时被退回空白页
++ 2026.11.17 3.0.8  boot() 增加 http(s) 协议守卫，避免在 about:blank 上初始化面板抛 SecurityError
