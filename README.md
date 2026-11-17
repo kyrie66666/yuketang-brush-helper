@@ -52,6 +52,18 @@
 
 详见 [docs/exam.md](docs/exam.md)
 
+### 高级用法：tools/ 外部自动化（可选）
+
+仓库里还有一个 `tools/` 目录，提供两件事，都依赖 Node.js ≥ 22 + 浏览器远程调试（无需 npm install）：
+
+- **多窗口并发刷课**：`node tools/brush.mjs --course <课堂id> --windows 4 --minutes 30`
+- **考试工具**：`node tools/exam.mjs list/open/answer/verify`，可自动作答并交卷
+
+为什么考试要单独做成外部脚本：考试系统在 `examination.xuetangx.com`（跨域），
+且选项是受控组件，**必须用 CDP 派发的受信任事件**才能勾选，油猴脚本做不到。
+
+用法与前置条件见 [tools/README.md](tools/README.md)。
+
 ### 已适配雨课堂学校及网址：
 学校：中原工学院，河南大学研究院，广东财经大学，辽宁大学，河北大学，中南大学，电子科技大学，华北电力大学，上海理工大学研究生院、东南大学研究生院及其他院校...
 
