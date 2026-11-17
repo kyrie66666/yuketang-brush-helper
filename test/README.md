@@ -2,7 +2,7 @@
 
 针对 2026.11 雨课堂改版（课程内容整体迁移到 `/ai-workspace/lms-graph/<课堂id>/<type>/<leaf>`）的回归测试。
 
-不依赖真实账号、不访问现网，用本地 fixture 复刻现网 DOM，再用 CDP 驱动一个真实浏览器注入 `yuketang.js` 做断言。
+不依赖真实账号、不访问现网，用本地 fixture 复刻现网 DOM，再用 CDP 驱动一个真实浏览器注入 `yuketang.user.js` 做断言。
 
 ## 前置
 
@@ -29,7 +29,7 @@ node test/run-fixtures.mjs --port 9222 --http-port 8787
 |---|---|---|
 | `--port` | 9222 | CDP HTTP 端口 |
 | `--http-port` | 8787 | fixture 静态服务器端口 |
-| `--script` | `../yuketang.js` | 被测脚本路径，可指向旧版本做对照 |
+| `--script` | `../yuketang.user.js` | 被测脚本路径，可指向旧版本做对照 |
 
 退出码：全部通过为 `0`，有失败为 `1`。
 

@@ -8,11 +8,11 @@
  *   3. graph（图文）—— 识别为 graph 类型、跳过内容处理并返回目录页
  *
  * 做法：本地 HTTP 服务器把 fixtures 挂在真实的 /ai-workspace/lms-graph/<cid>/<type>/<leaf>
- * 路径上，用 CDP 驱动一个真实 Chromium/Edge 页面，注入 yuketang.js（带 GM_* stub），
+ * 路径上，用 CDP 驱动一个真实 Chromium/Edge 页面，注入 yuketang.user.js（带 GM_* stub），
  * 然后断言页面侧的可观察结果。
  *
  * 用法：
- *   node test/run-fixtures.mjs [--port 9222] [--http-port 8787] [--script ../yuketang.js]
+ *   node test/run-fixtures.mjs [--port 9222] [--http-port 8787] [--script ../yuketang.user.js]
  *
  * 前置：一个带 --remote-debugging-port 的 Edge/Chromium 正在运行。
  */
@@ -32,7 +32,7 @@ const opt = (name, def = '') => {
 
 const CDP_PORT = Number(opt('port', '9222'));
 const HTTP_PORT = Number(opt('http-port', '8787'));
-const SCRIPT_PATH = path.resolve(HERE, opt('script', '../yuketang.js'));
+const SCRIPT_PATH = path.resolve(HERE, opt('script', '../yuketang.user.js'));
 const CLASSROOM = '33645148';
 const BASE = `http://127.0.0.1:${HTTP_PORT}`;
 

@@ -1,121 +1,214 @@
 # 雨课堂刷课助手
 
-### 脚本使用：
+一个面向[雨课堂](https://www.yuketang.cn)的用户脚本（Userscript）：自动播放课程视频/音频、
+翻阅图文与课件、自动回复讨论，可选接入大模型自动做作业。
 
-点击进入要刷的**课程目录**页面（不是视频页面）点击开始刷课按钮即可自动运行，如有bug，底部有作者联系方式，可能需要大家的账号进行测试修复，如有需要可以加底部作者联系方式，感谢每一位为脚本做出贡献的用户。  
-![课程目录](/images/image.png "课程目录")
+- **版本**：v3.1.0（适配 2026.11 改版）
+- **许可证**：[GPL-3.0](LICENSE)
+- **适用**：Tampermonkey / Violentmonkey 等脚本管理器（Chrome、Edge、Firefox）
 
-> **v3.1.0 重要说明（2026.11 改版适配）**
-> 雨课堂已把课程内容整体迁移到 `/ai-workspace/lms-graph/...` 路由，旧脚本的选择器基本全部失效。本版已重新适配，并实测刷完了一门 293 个学习单元的课程（116 图文 + 43 视频 + 134 讨论）。
-> 详见 [releaseLog.md](releaseLog.md) 与 [docs/exam.md](docs/exam.md)。
+> **v3.1.0 说明**
+> 雨课堂已把课程内容整体迁移到 `/ai-workspace/lms-graph/...` 路由，旧版选择器基本失效。
+> 本版完成重新适配，并实测跑完一门包含 293 个学习单元的课程
+> （116 图文 + 43 视频 + 134 讨论，最终 293/293 全部完成）。
+> 改动明细见 [releaseLog.md](releaseLog.md)。
 
-### 多窗口并发（可选，大幅提速）
+![界面截图](images/image.png)
 
-视频是刷课的主要耗时。脚本支持**多窗口各刷各的**（通过 localStorage 认领队列避免重复劳动）。
+---
 
-要点：
+## 功能
 
-1. **必须开独立窗口，不要用同一窗口的多个标签页**
-   浏览器会节流后台标签页，导致视频 `duration` 恒为 0、根本播不动。实测 4 个标签页只有前台那个能播。
-2. 启动浏览器时建议加上这些参数（关闭后台/遮挡节流）：
+| 功能 | 说明 |
+|---|---|
+| 自动刷视频 | 2 倍速 + 静音，播完自动切下一节，支持断点续刷 |
+| 自动刷音频 | 批量区里的音频单元自动播放 |
+| 图文 / 课件 | 自动打开、翻页（PPT 逐张点）、识别"已读"状态 |
+| 讨论自动回复 | 可配置为复制已有发言回复（需手动开启） |
+| 作业自动作答 | 截图 OCR + 大模型作答（需自备 API Key，手动开启） |
+| 防挂机 | 防切屏检测、自动关闭挂机提示、自动续播 |
+| 多窗口并发 | 多个窗口各刷不同条目，互不重复（可选，大幅提速） |
 
-   ```
-   --disable-background-timer-throttling
-   --disable-backgrounding-occluded-windows
-   --disable-renderer-backgrounding
-   --disable-features=CalculateNativeWinOcclusion
-   --autoplay-policy=no-user-gesture-required
-   ```
+---
 
-3. 窗口可以被其它窗口挡住（不影响播放），但**不要最小化**。
-4. 实测 8 个窗口可同时以 2 倍速播放不同视频。
+## 安装
 
-两个 localStorage 开关：
+1. 先给浏览器安装脚本管理器：[Tampermonkey](https://www.tampermonkey.net/)
+   （Firefox 也可用 Violentmonkey / Greasemonkey）
+2. 点击下面的链接，脚本管理器会自动弹出安装页：
 
-| 键 | 值 | 作用 |
+   **https://raw.githubusercontent.com/kyrie66666/yuketang-jiaoben/main/yuketang.user.js**
+
+3. 在弹出的页面点「安装」即可。
+
+> 脚本已内置 `@updateURL`，之后本仓库更新版本时，Tampermonkey 会自动提示升级。
+
+如果点击链接没有反应（某些浏览器会把它当普通文件打开），可以：
+打开上述链接 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → 保存。
+
+---
+
+## 使用
+
+### 1. 开始刷课
+
+1. 打开雨课堂网页版，进入**课程的「学习日志 / 目录」页面**
+   （不是视频播放页，是能看到整章列表的那一页）
+2. 右下角会出现"雨课堂刷课助手"面板
+3. 点「**开始刷课**」
+
+脚本会自动逐条往下刷。中途刷新页面或跳转后，会**自动续刷**，不需要重新点。
+
+面板上的按钮：
+
+| 按钮 | 作用 |
+|---|---|
+| AI配置 | 填写大模型 API（URL / Key / 模型名 / 格式） |
+| 清除缓存 | 清掉当前课程的刷课进度 |
+| 开始刷课 | 启动 |
+| 停止刷课 | 清除续刷标记并刷新页面，回到空闲状态 |
+| 重新加载 | 刷新页面并自动续刷（卡住时用） |
+
+### 2. 启用 AI 自动作答（可选）
+
+「AI配置」里填入以下任一项服务即可，脚本兼容 OpenAI 与 Anthropic 两种接口格式：
+
+| 服务 | API URL | 模型名示例 |
 |---|---|---|
-| `ykt_mode` | `all`（默认）/ `fast` | `fast` 只刷图文/讨论这类秒级条目（并发友好），视频留给串行 |
-| `ykt_exam_mode` | `off`（默认）/ `on` | `on` 时遇到考试会自动帮你打开考试系统 |
+| DeepSeek | `https://api.deepseek.com/chat/completions` | `deepseek-chat` |
+| Kimi | `https://api.moonshot.cn/v1/chat/completions` | `moonshot-v1-8k` |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` | `qwen-plus` |
+| OpenAI | `https://api.openai.com/v1/chat/completions` | `gpt-4o-mini` |
+| Claude | `https://api.anthropic.com/v1/messages` | `claude-3-5-sonnet-20241022` |
 
-### 关于考试（人工辅助，不自动作答）
+填完后在配置页勾选「用 AI 自动作答」和/或「用批量区图文/讨论自动回复」。
+未勾选时脚本不会调用任何 AI 接口。
 
-雨课堂的测验/考试**不在 yuketang.cn 上**：点「开始答题」会在新标签页打开独立的
-`examination.xuetangx.com`，脚本的 `@match` 不覆盖该域名，页面内还嵌了腾讯验证码。
+### 3. 多窗口并发（可选，大幅提速）
 
-因此本脚本对考试只做两件事：
+视频是刷课最耗时的部分。脚本支持**多个窗口同时刷**，通过 localStorage 认领队列保证互不重复。
 
-- 识别考试项，**默认停在「考生须知」页不动**（不会消耗任何作答机会）
-- 设 `ykt_exam_mode=on` 时，帮你点开考试系统，然后提示你人工作答
+1. **必须开独立窗口，不要在同一个窗口开多个标签页。**
+   浏览器会节流后台标签页，导致视频 `duration` 恒为 0、根本播不动。
+2. 建议用带反节流参数的浏览器启动（见 [tools/README.md](tools/README.md)）。
+3. 窗口可以被其它窗口挡住，但**不要最小化**。
 
-**打开考试页不会消耗次数**，只有点了「开始答题」→「开始」才真正开始计时。
-课程目录里的考试项（`#icon-kaoshi`）在刷课流程中会被安全跳过。
+两个开关（浏览器控制台执行）：
 
-详见 [docs/exam.md](docs/exam.md)
+```js
+localStorage.setItem('ykt_mode', 'fast')      // 只刷图文/讨论，视频留给串行
+localStorage.setItem('ykt_exam_mode', 'on')   // 遇到考试时自动帮你打开考试系统
+```
 
-### 高级用法：tools/ 外部自动化（可选）
+| 键 | 取值 | 作用 |
+|---|---|---|
+| `ykt_mode` | `all`（默认）/ `fast` | `fast` 只处理秒级条目，并发更高效 |
+| `ykt_exam_mode` | `off`（默认）/ `on` | `on` 时自动打开考试系统（仍需人工作答） |
 
-仓库里还有一个 `tools/` 目录，提供两件事，都依赖 Node.js ≥ 22 + 浏览器远程调试（无需 npm install）：
+---
 
-- **多窗口并发刷课**：`node tools/brush.mjs --course <课堂id> --windows 4 --minutes 30`
-- **考试工具**：`node tools/exam.mjs list/open/answer/verify`，可自动作答并交卷
+## 关于考试
 
-为什么考试要单独做成外部脚本：考试系统在 `examination.xuetangx.com`（跨域），
-且选项是受控组件，**必须用 CDP 派发的受信任事件**才能勾选，油猴脚本做不到。
+**脚本不自动作答考试。** 原因：
 
-用法与前置条件见 [tools/README.md](tools/README.md)。
+- 考试系统在另一个域名 `examination.xuetangx.com`，用户脚本的 `@match` 不覆盖
+- 选项是 Vue 受控组件，**必须用受信任事件**才能勾选，油猴脚本无法伪造
 
-### 已适配雨课堂学校及网址：
-学校：中原工学院，河南大学研究院，广东财经大学，辽宁大学，河北大学，中南大学，电子科技大学，华北电力大学，上海理工大学研究生院、东南大学研究生院及其他院校...
+脚本对考试只做两件事：
 
-网址：changjiang.yuketang.cn，yuketang.cn ...
+- 识别考试项，**默认停在「考生须知」页不动**（不消耗任何作答机会）
+- 设 `ykt_exam_mode=on` 时，帮你打开考试系统，然后提示你人工作答
 
-### 脚本来历：
+> 打开考试页**不会**消耗作答机会，只有点「开始答题」→「开始」才真正开始。
+> 刷课流程经过考试项会自动跳过。
 
-油猴上有好多刷课脚本，不过我试了好几个点赞量很多的脚本却均在雨课堂上并不生效，很佩服这些大佬写上千行代码实现各平台的刷课脚本，也被吓到过，不过自己最终还是实现了雨课堂专用脚本，脚本内容简洁详细，仅100余行（初代），且有一定的代码备注，想学习的同学可以容易查阅。不过，写脚本倒是锻炼自己dom,bom的好机会。学习了很多。
-进一步更新优化了代码结构，不过里面的代码还是很丑，欢迎大家pull。
+想了解完整的实测结论与 DOM 结构，见 [docs/exam.md](docs/exam.md)。
 
-欢迎大家补充star：[github地址](https://github.com/Niuwh/yuketang-jiaoben)
+---
 
-### 温馨提示：
+## 高级：tools/ 外部自动化
 
-好好学习，天天向上，适当刷课，快乐成长^_^
+仓库里的 [tools/](tools/README.md) 提供两件事（需要 Node.js ≥ 22，无需 `npm install`）：
 
-### 免责声明：
+```bash
+# 多窗口并发刷课
+node tools/brush.mjs --course <课堂id> --windows 4 --minutes 30
 
-用户脚本（Userscript）是一种程序，通常用 JavaScript 编写，可用于修改网页代码以增强用户的浏览体验。具体用途有添加网页的快捷按钮，控制视频播放速度以及为网站添加其他功能。 在 Firefox 浏览器等桌面浏览器上，Userscript 是通过浏览器扩充功能中的脚本管理器（例如 Greasemonkey ）启用的。
+# 考试工具：列考试 / 开始并导出题目 / 作答交卷 / 查分
+node tools/exam.mjs list   --course <课堂id>
+node tools/exam.mjs open   --course <课堂id> --leaf <leafId>
+node tools/exam.mjs answer --id <leafTypeId> --answers answers.json
+node tools/exam.mjs verify --id <leafTypeId>
+```
 
-此项目作为开源的用户脚本，遵循用户脚本的编写规范，并且使用纯粹的 javascript 执行代码，不对页面进行任何源码的修改，不附加任何等非法入侵计算机系统的功能，不对客户端计算机进行任何破坏越权控制等行为。
+前置条件与详细用法见 [tools/README.md](tools/README.md)。
 
-该项目作为开源用户脚本，供各大用户学习、交流、参考、使用，项目所有功能均为开源免费，如果存在收费功能则为其他项目，对于所造成的任何费用损失不负任何责任。
+---
 
-使用本项目即代表用户对此项目的源码和功能有一定的了解，对于所造成的一切后果均由用户自己承担。
+## 常见问题
 
-### 脚本作者承诺：
+**Q：面板不出现 / 不显示悬浮窗？**
+A：确认脚本已启用、页面是 `*.yuketang.cn` 或 `*.gdufemooc.cn`、并且刷新一次页面。
+部分学校域名不同，需要在 Tampermonkey 里给脚本加 `@match`。
 
-如脚本无意冒犯了您的著作权，请联系作者进行删除，绝不再进行此类活动侵犯您的权益。
+**Q：视频刷完进度还是 98%/99%？**
+A：v3.1.0 已修复（改为必须等到播放器真正 `ended` 才离开）。如果仍出现，点「重新加载」。
 
-### 贡献者名单：
+**Q：刷到一半停了？**
+A：点「重新加载」即可从当前进度继续。长时间挂机时别最小化浏览器窗口。
 
-+ duck123ducker     解决了雨课堂进入后台意外暂停的bug
-+ insorker          增加错误页面匹配提醒 && 修改倍速函数，支持3倍速
-+ PRO-2684          解决了pro/lms路线雨课堂切屏检测问题
-+ pioneerRick       增加了批量中图文和讨论的自动回复功能，以及使用ocr识别作业后利用大模型生成回复自动回答功能
-+ 语冰              修复了panel无法插入的问题
-+ ANGJustinl        添加AI伴学弹出窗口路由支持
-+ tfia              增加了对 Anthropic 格式 API 和相应认证方式的支持，并增加选项供用户选择
-+ xinyangcui        修复了面板增加停止刷课BUG、添加重新加载按钮
+**Q：某个条目不处理、一直跳过？**
+A：脚本对失败的条目有 10 分钟冷却，期间会跳过它去处理别的，冷却后自动重试。
 
-### 许可证
+**Q：会不会重复刷同一条？**
+A：不会。进度按「站点 + 路径 + 课堂 id」记录，多窗口之间用认领队列互斥。
 
-本项目采用 **GNU General Public License v3.0（GPLv3）**，全文见 [LICENSE](LICENSE)。
+---
+
+## 目录结构
+
+```
+yuketang.user.js   用户脚本本体（唯一需要安装的文件）
+docs/exam.md       考试系统的实测结论与 DOM 结构
+tools/             外部自动化工具（可选）
+test/              fixture 回归测试
+releaseLog.md      版本更新记录
+images/            截图
+```
+
+## 开发与测试
+
+脚本为单文件、无构建步骤。改动后可直接用 `node --check yuketang.user.js` 校验语法。
+
+回归测试（需要本机有可远程调试的浏览器）：
+
+```bash
+node test/run-fixtures.mjs --port 9222
+```
+
+测试用本地 fixture 复刻现网的 forum / video / graph 三种页面结构，通过 CDP 注入脚本并断言行为。
+详见 [test/README.md](test/README.md)。
+
+---
+
+## 许可证
+
+[GNU General Public License v3.0](LICENSE)。
 
 - 原始脚本作者：风之子（[Niuwh/yuketang-jiaoben](https://github.com/Niuwh/yuketang-jiaoben)）
-- 本仓库在原始脚本基础上做了 2026.11 改版适配、多窗口并发、回归测试与 `tools/` 外部自动化工具
+- 本仓库在其基础上完成了 2026.11 改版适配、多窗口并发、回归测试与 `tools/` 工具
 
-简单说：你可以自由使用、修改、分发本项目；但如果分发修改后的版本，
-**必须同样以 GPLv3 开源并提供源码**，并保留原有版权声明。
+你可以自由使用、修改、分发本项目；分发修改后的版本时，**必须同样以 GPLv3 开源并提供源码**，
+并保留原有版权声明。
 
-> 许可证只规定代码的复制与再分发权利，**不构成对使用行为的任何豁免** ——
-> 使用脚本时仍需自行遵守所在平台的服务条款与学校的学术规定。
+---
 
-如有任何问题或提议，欢迎大家访问我的网站：[https://niuwh.cn](https://niuwh.cn) ,里面有我的联系方式。或者博客留言：[https://blog.niuwh.cn](https://blog.niuwh.cn)。
+## 免责声明
+
+本项目为开源用户脚本，仅供学习、交流与技术研究使用。脚本通过浏览器端 DOM 操作增强页面功能，
+不修改服务器数据、不绕过账号权限、不包含任何破坏性操作。
+
+使用本项目即表示你已了解其工作原理，并自行承担使用后果。请遵守所在平台的服务条款与学校的
+学术诚信规定。作者不对因使用本脚本导致的任何成绩、账号或其它损失负责。
+
+若本项目无意侵犯了您的权益，请联系作者删除。

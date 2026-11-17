@@ -31,7 +31,7 @@ const WINDOWS = Number(opt('windows', '4'));
 const MINUTES = Number(opt('minutes', '30'));
 const MODE = opt('mode', 'all'); // all | fast（fast 只刷图文/讨论，视频留给串行）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = opt('script', path.join(HERE, '..', 'yuketang.js'));
+const SCRIPT = opt('script', path.join(HERE, '..', 'yuketang.user.js'));
 
 if (!COURSE) fail('需要 --course <classroomId>');
 if (!fs.existsSync(SCRIPT)) fail(`找不到脚本: ${SCRIPT}`);
