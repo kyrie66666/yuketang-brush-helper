@@ -171,7 +171,7 @@ node tools/exam.mjs verify --id <leafTypeId>
 
 **Q：面板不出现 / 不显示悬浮窗？**
 A：确认脚本已启用、页面是 `*.yuketang.cn` 或 `*.gdufemooc.cn`、并且刷新一次页面。
-部分学校域名不同，需要在 Tampermonkey 里给脚本加 `@match`。
+部分学校使用的是其它域名，需要在 Tampermonkey 里给脚本补一条匹配网址（`@match`）才会生效。
 
 **Q：视频刷完进度还是 98%/99%？**
 A：v3.1.0 已修复。若仍出现，点「重新加载」。
