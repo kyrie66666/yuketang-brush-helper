@@ -35,16 +35,21 @@
 
 1. 先给浏览器安装脚本管理器：[Tampermonkey](https://www.tampermonkey.net/)
    （Firefox 也可用 Violentmonkey / Greasemonkey）
-2. 点击下面的链接，脚本管理器会自动弹出安装页：
 
-   **https://raw.githubusercontent.com/kyrie66666/yuketang-jiaoben/main/yuketang.user.js**
+2. 安装脚本，任选一个链接（**推荐第一个，国内可直连**）：
 
-3. 在弹出的页面点「安装」即可。
+   | 方式 | 链接 | 说明 |
+   |---|---|---|
+   | **jsDelivr CDN（推荐）** | https://cdn.jsdelivr.net/gh/kyrie66666/yuketang-jiaoben@main/yuketang.user.js | 国内一般可直连 |
+   | GitHub Raw | https://raw.githubusercontent.com/kyrie66666/yuketang-jiaoben/main/yuketang.user.js | 部分网络需代理 |
 
-> 脚本已内置 `@updateURL`，之后本仓库更新版本时，Tampermonkey 会自动提示升级。
+   点击后脚本管理器会自动弹出安装页，点「安装」即可。
 
-如果点击链接没有反应（某些浏览器会把它当普通文件打开），可以：
-打开上述链接 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → 保存。
+3. 如果点击链接没有反应（有些浏览器会把它当普通文件打开），
+   就手动打开该链接 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → 保存。
+
+> 脚本内置 `@updateURL`（指向 GitHub Raw）。网络能访问 raw 时 Tampermonkey 会自动提示升级；
+> 若 raw 不可达，更新时用上面的 CDN 链接**重新安装覆盖**即可，配置和进度不会丢。
 
 ---
 
