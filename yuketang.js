@@ -1572,9 +1572,15 @@ ${ocrText}
         // 所以必须在点击前把进度落盘；否则回到目录页会从同一项重新开始（死循环）。
         this.updateProgress(this.outside, idx + 1);
 
-        if (tagText === '音频') {
+        // 新版 .tag 里只有 <svg><use>，没有文字，靠 tagText === '音频' 永远匹配不到；
+        // 这里同时接受文字包含和图标名（#icon-yinpin / #icon-audio）两种信号。
+        const tagIcon = String(tagHref || '').toLowerCase();
+        const isAudio = tagText.includes('音频') || tagIcon.includes('yinpin') || tagIcon.includes('audio');
+        const isVideo = tagIcon.includes('shipin') || tagText.includes('视频');
+
+        if (isAudio) {
           idx = await this.playAudioItem(item, title, idx);
-        } else if (tagHref.includes('shipin')) {
+        } else if (isVideo) {
           idx = await this.playVideoItem(item, title, idx);
         } else if (tagHref.includes('tuwen') || tagHref.includes('taolun')) {
           idx = await this.autoCommentItem(item, tagHref.includes('tuwen') ? '图文' : '讨论', idx);
