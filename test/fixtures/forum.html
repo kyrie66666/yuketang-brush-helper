@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>fixture: forum</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; }
+  .prompt-send-btn { display: inline-block; width: 40px; height: 24px; background: #1677ff; border-radius: 4px; cursor: pointer; }
+  .prompt-send-btn.disabled { background: #ccc; cursor: not-allowed; }
+  .comment-text { padding: 6px 0; border-bottom: 1px solid #eee; }
+</style>
+</head>
+<body>
+<!-- 复刻 2026.11 新版 ai-workspace forum 页的关键结构：
+     .comment-text 为评论正文；.prompt-send-box > .prompt-input > textarea.el-textarea__inner
+     为回复框；.prompt-send-btn 在内容为空时带 .disabled -->
+<div class="learning-space-student">
+  <div class="comment-list">
+    <div class="comment">
+      <div class="comment-header flex"><div class="comment-header-right flex flex-col box-start">
+        <div class="nickname"><div class="ellipsis">同学甲</div></div>
+        <div class="publish-time">2026-11-17 15:53</div>
+      </div></div>
+      <div class="comment-text">这是一条已有的讨论发言，用来验证自动回复能正确读取它。</div>
+    </div>
+    <div class="comment">
+      <div class="comment-text">第二条发言内容，长度也超过八个字。</div>
+    </div>
+  </div>
+
+  <div class="colorful-card prompt-send-box">
+    <div class="inner">
+      <div class="prompt-white-box flex flex-col">
+        <div class="prompt-input el-textarea">
+          <textarea autocomplete="off" rows="1" placeholder="发表你的观点..." class="el-textarea__inner"></textarea>
+        </div>
+        <div class="prompt-input-actions flex justify-between">
+          <div class="prompt-input-actions-left"></div>
+          <div class="prompt-input-actions-right flex items-center">
+            <span class="prompt-send-btn-tips">Enter发送 / Shift+Enter换行</span>
+            <div class="prompt-send-btn items-center disabled"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 模拟真实组件：输入非空时解除 .disabled；点击发送后追加评论并清空输入框
+  const ta = document.querySelector('.prompt-send-box textarea.el-textarea__inner');
+  const btn = document.querySelector('.prompt-send-btn');
+  const list = document.querySelector('.comment-list');
+
+  ta.addEventListener('input', () => {
+    if (ta.value.trim()) btn.classList.remove('disabled');
+    else btn.classList.add('disabled');
+  });
+
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('disabled')) return;
+    const text = ta.value.trim();
+    if (!text) return;
+    const div = document.createElement('div');
+    div.className = 'comment-text';
+    div.textContent = text;
+    list.appendChild(div);
+    window.__POSTED__ = text;
+    // 脚本发完会立刻离开本页，用 localStorage 留痕以便跨导航断言
+    try { localStorage.setItem('__FIXTURE_POSTED__', text); } catch (e) {}
+    ta.value = '';
+    btn.classList.add('disabled');
+  });
+</script>
+</body>
+</html>

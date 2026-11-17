@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>fixture: video/audio</title>
+</head>
+<body>
+<!-- 用于验证「进度必须刷满」：脚本必须等媒体真正触发 ended 才离开。
+     这里用运行时合成的 3 秒 WAV，避免依赖外部媒体文件。 -->
+<div class="xt_video_player_current_time_display">0:00 / 0:03</div>
+<audio id="media"></audio>
+
+<script>
+  function makeWav(seconds, rate) {
+    const samples = seconds * rate;
+    const buffer = new ArrayBuffer(44 + samples);
+    const view = new DataView(buffer);
+    const write = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    write(0, 'RIFF');
+    view.setUint32(4, 36 + samples, true);
+    write(8, 'WAVE');
+    write(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);        // PCM
+    view.setUint16(22, 1, true);        // mono
+    view.setUint32(24, rate, true);
+    view.setUint32(28, rate, true);     // byte rate (8bit mono)
+    view.setUint16(32, 1, true);        // block align
+    view.setUint16(34, 8, true);        // bits per sample
+    write(36, 'data');
+    view.setUint32(40, samples, true);
+    for (let i = 0; i < samples; i++) view.setUint8(44 + i, 128); // 8bit 静音
+    return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+  }
+
+  const media = document.getElementById('media');
+  media.src = makeWav(3, 8000);
+  window.__MEDIA_EL__ = media;
+  media.addEventListener('ended', () => {
+    window.__ENDED__ = true;
+    // 脚本判"完成"后会立刻离开本页，用 localStorage 留痕以证明离开前
+    // 播放器确实触发了 ended（而不是在结尾前 1 秒就被判完成跳走）
+    try { localStorage.setItem('__FIXTURE_ENDED__', '1'); } catch (e) {}
+  });
+</script>
+</body>
+</html>

@@ -826,8 +826,13 @@
       // 直接监听 pause 事件，不依赖播放器 UI 元素
       const onPause = () => { if (canResume()) playVideo(); };
       video.addEventListener('pause', onPause);
-      // 定时兜底：防止 pause 事件被拦截
-      const timer = setInterval(() => { if (video.paused && canResume()) playVideo(); }, 5000);
+      // 定时兜底：防止 pause 事件被拦截。间隔过大（原 5s）会造成明显卡顿，
+      // 缩短到 1.5s（issue #43）。
+      const timer = setInterval(() => { if (video.paused && canResume()) playVideo(); }, 1500);
+      // 切后台/失焦时浏览器会暂停播放，回到前台立刻续播
+      const onVisible = () => { if (!document.hidden) { if (video.paused && canResume()) playVideo(); } };
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
       // 播放器 UI 观察：按钮被点击暂停时 tip 变为「播放」
       const target = document.getElementsByClassName('play-btn-tip')[0];
       let observer = null;
@@ -844,6 +849,8 @@
       return () => {
         video.removeEventListener('pause', onPause);
         clearInterval(timer);
+        document.removeEventListener('visibilitychange', onVisible);
+        window.removeEventListener('focus', onVisible);
         if (observer) observer.disconnect();
       };
     },
@@ -921,7 +928,10 @@
       const playedDelta = Math.max(0, currentTime - startTime);
       if (playedDelta < minPlayedDelta) return false;
       if (media?.ended) return true;
-      if (duration > 1 && currentTime > 0 && duration - currentTime <= 1) return true;
+      // 注意：不能用 duration - currentTime <= 1 这种宽松阈值提前判完成。
+      // 播放器需要真正触发 ended，服务端才会把进度记成 100%；
+      // 提前 1 秒跳走会让该节停在 98%/99%（issue #43、#46）。
+      if (duration > 1 && currentTime > 0 && duration - currentTime <= 0.15) return true;
       const display = document.querySelector('.xt_video_player_current_time_display')?.innerText?.trim() || '';
       const [current, total] = display.split(' / ').map(text => text?.trim());
       return Boolean(playedDelta >= minPlayedDelta && current && total && current === total);
@@ -2152,11 +2162,21 @@ ${ocrText}
             return false;
           }, { interval: 1000, timeout: await Utils.getDDL() })
         ]);
+        // 即使轮询先判定“接近结尾”，也必须等到播放器真正触发 ended 再离开，
+        // 否则服务端只记录到 98%/99%，该节永远刷不满。
+        if (done && !media.ended) {
+          this.panel.log('接近结尾，等待播放器真正结束...');
+          await Player.waitForEnd(media, 20000);
+        }
         media.removeEventListener('ended', onEnded);
+        const reallyEnded = Boolean(media?.ended);
         playbackState.completed = true;
         if (!done) {
           this.panel.log('等待播放完成超时，停止当前轮次');
           return false;
+        }
+        if (!reallyEnded) {
+          this.panel.log('⚠️ 未等到 ended 事件，该节进度可能停在 99% 附近');
         }
       } finally {
         stopObserve();
