@@ -26,11 +26,8 @@
 - [许可证](#许可证)
 - [免责声明](#免责声明)
 
-> **v3.1.0 说明**
-> 雨课堂已把课程内容整体迁移到 `/ai-workspace/lms-graph/...` 路由，旧版选择器基本失效。
-> 本版完成重新适配，并实测跑完一门包含 293 个学习单元的课程
-> （116 图文 + 43 视频 + 134 讨论，最终 293/293 全部完成）。
-> 改动明细见 [CHANGELOG.md](CHANGELOG.md)。
+> **v3.1.0 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
+> （116 图文 + 43 视频 + 134 讨论，293/293 全部完成）。改动明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![界面截图](images/image.png)
 
@@ -56,30 +53,23 @@
 
 [Tampermonkey](https://www.tampermonkey.net/)（Firefox 也可用 Violentmonkey / Greasemonkey）。
 
-### 2. 下载脚本文件
+### 2. 下载脚本
 
-**推荐用这个链接，点它会直接下载文件（不会在浏览器里显示源码）**：
+从 [Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest) 页面下载
+`yuketang.user.js`：
 
 **https://github.com/kyrie66666/yuketang-jiaoben/releases/latest/download/yuketang.user.js**
 
-也可以打开 [Release 页面](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest) 在
-「Assets」里点 `yuketang.user.js` 下载。
-
 ### 3. 装进 Tampermonkey
 
-拿到 `yuketang.user.js` 文件后，任选一种：
+任选一种：
 
-- **拖拽**：把文件直接拖到浏览器窗口里，Tampermonkey 会自动弹出安装页 → 点「安装」
+- **拖拽**：把 `yuketang.user.js` 拖到浏览器窗口里，Tampermonkey 会自动弹出安装页 → 点「安装」
 - **导入**：Tampermonkey 面板 →「实用工具」→「导入文件」→ 选择该文件
-- **粘贴**：用记事本打开该文件 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → `Ctrl+S` 保存
+- **粘贴**：文本编辑器打开该文件 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → `Ctrl+S` 保存
 
-> **为什么直接点在线链接只显示一堆代码？**
-> jsDelivr / GitHub Raw 返回的响应头带 `X-Content-Type-Options: nosniff`，
-> 浏览器会把它当纯文本内联显示，不会触发下载。
-> 上面第 2 步的 Release 下载链接带 `Content-Disposition: attachment`，所以会正常下载。
-
-> 脚本内置 `@updateURL`（指向 GitHub Raw），网络可达时 Tampermonkey 会提示升级；
-> 若 raw 不可达，重新从上面的链接下载并覆盖安装即可，配置与刷课进度不会丢。
+> 脚本内置 `@updateURL`，收到新版本时 Tampermonkey 会提示升级；
+> 也可以重新下载覆盖安装，配置与刷课进度不会丢。
 
 ---
 
@@ -123,8 +113,8 @@
 
 视频是刷课最耗时的部分。脚本支持**多个窗口同时刷**，通过 localStorage 认领队列保证互不重复。
 
-1. **必须开独立窗口，不要在同一个窗口开多个标签页。**
-   浏览器会节流后台标签页，导致视频 `duration` 恒为 0、根本播不动。
+1. **必须用独立窗口，不要在同一个窗口开多个标签页。**
+   浏览器会限制后台标签页里的视频播放，多个标签只有前台那个能正常跑。
 2. 建议用带反节流参数的浏览器启动（见 [tools/README.md](tools/README.md)）。
 3. 窗口可以被其它窗口挡住，但**不要最小化**。
 
@@ -144,10 +134,7 @@ localStorage.setItem('ykt_exam_mode', 'on')   // 遇到考试时自动帮你打�
 
 ## 关于考试
 
-**脚本不自动作答考试。** 原因：
-
-- 考试系统在另一个域名 `examination.xuetangx.com`，用户脚本的 `@match` 不覆盖
-- 选项是 Vue 受控组件，**必须用受信任事件**才能勾选，油猴脚本无法伪造
+**脚本不自动作答考试。** 考试在独立的考试系统中进行，脚本只负责帮你打开，答题与交卷需要人工完成。
 
 脚本对考试只做两件事：
 
@@ -157,7 +144,7 @@ localStorage.setItem('ykt_exam_mode', 'on')   // 遇到考试时自动帮你打�
 > 打开考试页**不会**消耗作答机会，只有点「开始答题」→「开始」才真正开始。
 > 刷课流程经过考试项会自动跳过。
 
-想了解完整的实测结论与 DOM 结构，见 [docs/exam.md](docs/exam.md)。
+技术细节与实测结论见 [docs/exam.md](docs/exam.md)。
 
 ---
 
@@ -187,7 +174,7 @@ A：确认脚本已启用、页面是 `*.yuketang.cn` 或 `*.gdufemooc.cn`、并
 部分学校域名不同，需要在 Tampermonkey 里给脚本加 `@match`。
 
 **Q：视频刷完进度还是 98%/99%？**
-A：v3.1.0 已修复（改为必须等到播放器真正 `ended` 才离开）。如果仍出现，点「重新加载」。
+A：v3.1.0 已修复。若仍出现，点「重新加载」。
 
 **Q：刷到一半停了？**
 A：点「重新加载」即可从当前进度继续。长时间挂机时别最小化浏览器窗口。
@@ -196,7 +183,7 @@ A：点「重新加载」即可从当前进度继续。长时间挂机时别最�
 A：脚本对失败的条目有 10 分钟冷却，期间会跳过它去处理别的，冷却后自动重试。
 
 **Q：会不会重复刷同一条？**
-A：不会。进度按「站点 + 路径 + 课堂 id」记录，多窗口之间用认领队列互斥。
+A：不会。进度按课程分别记录，多窗口之间也做了互斥。
 
 ---
 
