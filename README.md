@@ -33,23 +33,34 @@
 
 ## 安装
 
-1. 先给浏览器安装脚本管理器：[Tampermonkey](https://www.tampermonkey.net/)
-   （Firefox 也可用 Violentmonkey / Greasemonkey）
+### 1. 装脚本管理器
 
-2. 安装脚本，任选一个链接（**推荐第一个，国内可直连**）：
+[Tampermonkey](https://www.tampermonkey.net/)（Firefox 也可用 Violentmonkey / Greasemonkey）。
 
-   | 方式 | 链接 | 说明 |
-   |---|---|---|
-   | **jsDelivr CDN（推荐）** | https://cdn.jsdelivr.net/gh/kyrie66666/yuketang-jiaoben@main/yuketang.user.js | 国内一般可直连 |
-   | GitHub Raw | https://raw.githubusercontent.com/kyrie66666/yuketang-jiaoben/main/yuketang.user.js | 部分网络需代理 |
+### 2. 下载脚本文件
 
-   点击后脚本管理器会自动弹出安装页，点「安装」即可。
+**推荐用这个链接，点它会直接下载文件（不会在浏览器里显示源码）**：
 
-3. 如果点击链接没有反应（有些浏览器会把它当普通文件打开），
-   就手动打开该链接 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → 保存。
+**https://github.com/kyrie66666/yuketang-jiaoben/releases/latest/download/yuketang.user.js**
 
-> 脚本内置 `@updateURL`（指向 GitHub Raw）。网络能访问 raw 时 Tampermonkey 会自动提示升级；
-> 若 raw 不可达，更新时用上面的 CDN 链接**重新安装覆盖**即可，配置和进度不会丢。
+也可以打开 [Release 页面](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest) 在
+「Assets」里点 `yuketang.user.js` 下载。
+
+### 3. 装进 Tampermonkey
+
+拿到 `yuketang.user.js` 文件后，任选一种：
+
+- **拖拽**：把文件直接拖到浏览器窗口里，Tampermonkey 会自动弹出安装页 → 点「安装」
+- **导入**：Tampermonkey 面板 →「实用工具」→「导入文件」→ 选择该文件
+- **粘贴**：用记事本打开该文件 → 全选复制 → Tampermonkey 面板「添加新脚本」→ 粘贴覆盖 → `Ctrl+S` 保存
+
+> **为什么直接点在线链接只显示一堆代码？**
+> jsDelivr / GitHub Raw 返回的响应头带 `X-Content-Type-Options: nosniff`，
+> 浏览器会把它当纯文本内联显示，不会触发下载。
+> 上面第 2 步的 Release 下载链接带 `Content-Disposition: attachment`，所以会正常下载。
+
+> 脚本内置 `@updateURL`（指向 GitHub Raw），网络可达时 Tampermonkey 会提示升级；
+> 若 raw 不可达，重新从上面的链接下载并覆盖安装即可，配置与刷课进度不会丢。
 
 ---
 
