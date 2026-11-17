@@ -1,16 +1,16 @@
 # 雨课堂刷课助手
 
-[![CI](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml/badge.svg)](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml)
+[![CI](https://github.com/kyrie66666/yuketang-brush-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/kyrie66666/yuketang-brush-helper/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-3.2.1-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-3.2.2-blue.svg)](CHANGELOG.md)
 
 一个面向[雨课堂](https://www.yuketang.cn)的用户脚本（Userscript）：自动播放课程视频/音频、
 翻阅图文与课件、自动回复讨论，可选接入大模型自动做作业。
 
-- **版本**：v3.2.1（适配 2026.11 改版）
+- **版本**：v3.2.2（适配 2026.11 改版）
 - **许可证**：[GPL-3.0](LICENSE)
 - **适用**：Tampermonkey / Violentmonkey 等脚本管理器（Chrome、Edge、Firefox）
-- **下载**：[Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest)
+- **下载**：[Releases](https://github.com/kyrie66666/yuketang-brush-helper/releases/latest)
 
 ## 目录
 
@@ -26,7 +26,7 @@
 - [许可证](#许可证)
 - [免责声明](#免责声明)
 
-> **v3.2.1 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
+> **v3.2.2 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
 > （116 图文 + 43 视频 + 134 讨论，293/293 全部完成）。改动明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![界面截图](images/image.png)
@@ -55,10 +55,10 @@
 
 ### 2. 下载脚本
 
-从 [Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest) 页面下载
+从 [Releases](https://github.com/kyrie66666/yuketang-brush-helper/releases/latest) 页面下载
 `yuketang.user.js`：
 
-**https://github.com/kyrie66666/yuketang-jiaoben/releases/latest/download/yuketang.user.js**
+**https://github.com/kyrie66666/yuketang-brush-helper/releases/latest/download/yuketang.user.js**
 
 ### 3. 装进 Tampermonkey
 

@@ -7,6 +7,18 @@
 
 ---
 
+## [3.2.2] - 2026-11-17
+
+### 变更
+
+- **仓库迁移到独立仓库** [kyrie66666/yuketang-brush-helper](https://github.com/kyrie66666/yuketang-brush-helper)。
+  原仓库是 fork，GitHub 的仓库搜索默认排除 fork，导致项目无法被搜到。
+- 同步更新脚本的 `@downloadURL` / `@updateURL`、README 徽章与下载链接、Issue 模板中的仓库地址。
+
+> 从旧版升级：Tampermonkey 里重新安装一次本版本即可，之后会自动跟随新仓库更新。
+
+---
+
 ## [3.2.1] - 2026-11-17
 
 明确项目边界：**不提供任何考试相关功能**。

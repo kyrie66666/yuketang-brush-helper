@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         感谢反馈！提交前请先确认：
-        - 已阅读 [README 常见问题](https://github.com/kyrie66666/yuketang-jiaoben#常见问题)
+        - 已阅读 [README 常见问题](https://github.com/kyrie66666/yuketang-brush-helper#常见问题)
         - 脚本是最新版本（v3.1.0 及以上）
         - 已尝试点面板上的「重新加载」
 

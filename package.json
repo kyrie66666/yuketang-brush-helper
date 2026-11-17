@@ -1,6 +1,6 @@
 {
-  "name": "yuketang-jiaoben",
-  "version": "3.2.1",
+  "name": "yuketang-brush-helper",
+  "version": "3.2.2",
   "private": true,
   "description": "雨课堂刷课助手 —— Tampermonkey 用户脚本",
   "license": "GPL-3.0",
