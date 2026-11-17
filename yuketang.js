@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         雨课堂刷课助手
 // @namespace    http://tampermonkey.net/
-// @version      3.0.6
+// @version      3.0.7
 // @description  针对雨课堂视频进行自动播放，配置AI自动答题
 // @author       风之子
 // @license      GPL3
@@ -30,7 +30,7 @@
 
   // ---- 脚本配置，用户可修改 ----
   const Config = {
-    version: '3.0.6',     // 版本号
+    version: '3.0.7',     // 版本号
     playbackRate: 2,      // 视频播放倍速
     pptInterval: 3000,    // ppt翻页间隔
     storageKeys: {        // 使用者勿动
@@ -1051,6 +1051,43 @@
       ];
       return nodes.find(el => this.isVisibleElement(el) && pattern.test(this.normalizeText(el.innerText)));
     },
+    // ---- forum（讨论区，2026.11 新版 ai-workspace 结构）----
+    // 旧版依赖 #new_discuss / .new_discuss_list / .cont_detail，改版后全部失效，
+    // 现网实际结构：.prompt-send-box > .prompt-white-box > .prompt-input > textarea.el-textarea__inner
+    //               发送按钮为 div.prompt-send-btn（空内容时带 .disabled）
+    //               已有评论正文为 .comment-text
+    getForumEditor() {
+      return document.querySelector('.prompt-send-box textarea.el-textarea__inner')
+        || document.querySelector('.prompt-send-box textarea')
+        || document.querySelector('textarea.el-textarea__inner')
+        || null;
+    },
+    getForumSendButton() {
+      const btn = document.querySelector('.prompt-send-box .prompt-send-btn')
+        || document.querySelector('.prompt-send-btn');
+      if (!btn) return null;
+      const disabled = btn.classList.contains('disabled')
+        || btn.getAttribute('aria-disabled') === 'true';
+      return disabled ? null : btn;
+    },
+    getForumComments() {
+      return [...document.querySelectorAll('.comment-text')]
+        .map(el => this.normalizeText(el.innerText))
+        .filter(text => text.length > 8);
+    },
+    // 直接赋值在 Vue/Element 的双向绑定里可能不触发更新，必须走原生 setter + input 事件
+    setNativeValue(element, value) {
+      if (!element) return false;
+      const proto = element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (setter) setter.call(element, value);
+      else element.value = value;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    },
     getAllScourse() { // 获得ai-workspace的课程列表
       const list = document?.querySelectorAll(".nav-item-leaf-box")
       if (!list) panel.warn("没有发现课程资源")
@@ -1335,14 +1372,15 @@ ${ocrText}
     }
 
     checkCompletionStatus(statusBox, statusText) {
-      // 1. 检查明确的完成状态文本
-      if (statusText.includes('已完成') || statusText.includes('已读')) {
-        return true;
+      // 1. 检查明确的未完成状态文本（必须先判“未”，避免被下面的“已”误伤）
+      if (statusText.includes('未开始') || statusText.includes('未读') || statusText.includes('未发言') || statusText.includes('进行中')) {
+        return false;
       }
 
-      // 2. 检查明确的未完成状态文本
-      if (statusText.includes('未开始') || statusText.includes('未读') || statusText.includes('进行中')) {
-        return false;
+      // 2. 检查明确的完成状态文本
+      //    2026.11 新版列表的状态词：已完成 / 已读 / 已发言
+      if (statusText.includes('已完成') || statusText.includes('已读') || statusText.includes('已发言')) {
+        return true;
       }
 
       // 3. 检查学习进度数字比例
@@ -1471,14 +1509,26 @@ ${ocrText}
 
     async handleBatch(course, list) {
       const expandBtn = course.querySelector('.sub-info')?.querySelector('.gray')?.querySelector('span');
-      if (!expandBtn) {
+      const host = () => list[this.outside]?.querySelector('.leaf_list__wrap');
+      const readActivities = () => host()?.querySelectorAll('.activity__wrap') || [];
+
+      if (!expandBtn && !readActivities().length) {
         this.panel.log('未找到批量展开按钮，跳过');
         this.updateProgress(this.outside + 1, 0);
         return;
       }
-      expandBtn.click();
-      await Utils.sleep(1200);
-      const activities = list[this.outside]?.querySelector('.leaf_list__wrap')?.querySelectorAll('.activity__wrap') || [];
+      // 批量区是懒加载的（初始只有一个 loading 图）。已经展开过就不要再点，
+      // 否则会把它收起来；未展开则点击后轮询等活动项就绪，不再依赖固定 sleep。
+      if (!readActivities().length) {
+        if (expandBtn) expandBtn.click();
+        const loaded = await Utils.poll(() => readActivities().length > 0, { interval: 200, timeout: 15000 });
+        if (!loaded) {
+          this.panel.log('批量区内容未加载出来，跳过该章');
+          this.updateProgress(this.outside + 1, 0);
+          return;
+        }
+      }
+      const activities = readActivities();
       let idx = this.inside;
       this.panel.log(`进入批量区，内部进度 ${idx}/${activities.length}`);
       while (idx < activities.length) {
@@ -1500,6 +1550,10 @@ ${ocrText}
           this.updateProgress(this.outside, idx);
           continue;
         }
+
+        // 新版雨课堂点击内容项会整页跳转到 ai-workspace，本函数之后不会再执行，
+        // 所以必须在点击前把进度落盘；否则回到目录页会从同一项重新开始（死循环）。
+        this.updateProgress(this.outside, idx + 1);
 
         if (tagText === '音频') {
           idx = await this.playAudioItem(item, title, idx);
@@ -1994,24 +2048,42 @@ ${ocrText}
     async returnToSource(returnUrl) {
       this.panel.log('媒体播放完成，返回课程目录页继续匹配');
       await Utils.sleep(1200);
+
+      const target = returnUrl || Store.getPendingAutoStart()?.returnUrl || '';
+      const normalize = url => String(url || '').split('#')[0];
+      const isSameUrl = Boolean(target) && normalize(location.href) === normalize(target);
+
+      // 1) 内容页是用新标签页打开的：交回父窗口并关闭自己
       const sourceWindow = this.getSourceWindow();
-      console.log(sourceWindow);
-      if (sourceWindow) {
+      if (sourceWindow && sourceWindow !== window) {
         try {
-          sourceWindow.location.href = returnUrl;
+          sourceWindow.location.href = target;
           sourceWindow.focus();
           window.close();
           return true;
         } catch (e) {
-          console.error("跳转父窗口异常", e);
+          console.error('跳转父窗口异常', e);
         }
       }
-      // if (location.href !== returnUrl) {
-      //   location.href = returnUrl;
-      // } else {
-      //   history.back();
-      // }
-      // return true;
+
+      // 2) 同标签页整页跳转（2026.11 新版 ai-workspace 的真实进入方式）：
+      //    这种情况没有可用的 opener，原先此处整段被注释掉，
+      //    导致播完内容后永远停在内容页、无法回到目录页继续下一节。
+      if (target && !isSameUrl) {
+        this.panel.log('当前为同标签页跳转，直接返回课程目录页');
+        location.href = target;
+        return true;
+      }
+      if (target && isSameUrl) {
+        this.panel.log('已在目录页，使用浏览器后退补齐历史');
+        history.back();
+        return true;
+      }
+
+      // 3) 拿不到返回地址时退化为浏览器后退
+      this.panel.log('未记录目录页地址，尝试浏览器后退');
+      history.back();
+      return false;
     }
 
     async handleMedia(route) {
@@ -2197,6 +2269,66 @@ ${ocrText}
       return true;
     }
 
+    // ---- 讨论区（forum）：新版 ai-workspace 路由 ----
+    // 旧版 autoCommentItem 依赖的 #new_discuss/.cont_detail 已不存在，且讨论项现在
+    // 会整页跳转到 /ai-workspace/lms-graph/<cid>/forum/<leafId>，必须在这里处理
+    async handleForum(route) {
+      const title = AiWorkspace.getActiveLeafTitle() || `讨论 ${route.leafId}`;
+      const ready = await Utils.poll(() => Boolean(AiWorkspace.getForumEditor()), { interval: 500, timeout: 20000 });
+      if (!ready) {
+        this.panel.log('未找到讨论区输入框，停止当前轮次');
+        return false;
+      }
+
+      const featureFlags = Store.getFeatureConf();
+      if (!featureFlags.autoComment) {
+        this.panel.log(`${title}：已打开，但未开启「图文/讨论自动回复」，仅浏览`);
+        await Utils.sleep(1500);
+        return true;
+      }
+
+      const comments = AiWorkspace.getForumComments();
+      this.panel.log(`讨论区已有 ${comments.length} 条发言`);
+      if (!comments.length) {
+        this.panel.log('没有可参考的发言内容，跳过（避免空回复）');
+        return false;
+      }
+
+      // 沿用旧版策略：取第一条已有发言作为回复内容
+      const replyText = comments[0].slice(0, 300);
+      const editor = AiWorkspace.getForumEditor();
+      if (!editor) {
+        this.panel.log('输入框消失，停止当前轮次');
+        return false;
+      }
+      editor.focus();
+      AiWorkspace.setNativeValue(editor, replyText);
+      await Utils.sleep(600);
+
+      const sendReady = await Utils.poll(() => Boolean(AiWorkspace.getForumSendButton()), { interval: 300, timeout: 5000 });
+      if (!sendReady) {
+        // 兜底：回车发送（回复框提示 Enter发送 / Shift+Enter换行）
+        this.panel.log('发送按钮未激活，尝试回车发送');
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+      } else {
+        AiWorkspace.getForumSendButton().click();
+      }
+
+      // 以“输入框被清空”作为提交成功的判据
+      const submitted = await Utils.poll(() => {
+        const latest = AiWorkspace.getForumEditor();
+        return !latest || !latest.value || latest.value.trim() === '';
+      }, { interval: 500, timeout: 8000 });
+
+      if (submitted) {
+        this.panel.log(`✅ 已在讨论区发言：${title}`);
+      } else {
+        this.panel.log(`⚠️ 讨论区发言未确认成功：${title}`);
+      }
+      await Utils.sleep(1200);
+      return submitted;
+    }
+
     // 直接在ai-workspace页面处理课程的逻辑
     async handleNext(count) {
       if (count >= this.source.length) {
@@ -2225,6 +2357,8 @@ ${ocrText}
       let ok = false;
       if (route.type === 'video' || route.type === 'audio') {
         ok = await this.handleMedia(route);
+      } else if (route.type === 'forum') {
+        ok = await this.handleForum(route);
       } else if (route.type === 'exercise') {
         ok = await this.handleExercise(route);
       } else {
@@ -2286,6 +2420,8 @@ ${ocrText}
         && pendingAutoStart.classroomId === currentClassroomId
       ) {
         panel.log(`检测到跨页面跳转，自动恢复刷课：课堂 ${currentClassroomId}`);
+        // 刷新时间戳，避免长课程刷到一半超过 30 分钟有效期后不再自动续跑
+        Store.setPendingAutoStart(currentClassroomId, pendingAutoStart.returnUrl);
         setTimeout(() => panel.start(), 1200);
       }
     } catch (err) {
