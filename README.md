@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml/badge.svg)](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-3.2.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-3.2.1-blue.svg)](CHANGELOG.md)
 
 一个面向[雨课堂](https://www.yuketang.cn)的用户脚本（Userscript）：自动播放课程视频/音频、
 翻阅图文与课件、自动回复讨论，可选接入大模型自动做作业。
 
-- **版本**：v3.2.0（适配 2026.11 改版）
+- **版本**：v3.2.1（适配 2026.11 改版）
 - **许可证**：[GPL-3.0](LICENSE)
 - **适用**：Tampermonkey / Violentmonkey 等脚本管理器（Chrome、Edge、Firefox）
 - **下载**：[Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest)
@@ -17,8 +17,8 @@
 - [功能](#功能)
 - [安装](#安装)
 - [使用](#使用)
-- [关于考试](#关于考试)
-- [高级：tools/ 外部自动化](#高级tools-外部自动化)
+- [考试：不支持](#考试不支持)
+- [高级：多窗口命令行工具](#高级多窗口命令行工具)
 - [常见问题](#常见问题)
 - [目录结构](#目录结构)
 - [开发与测试](#开发与测试)
@@ -26,7 +26,7 @@
 - [许可证](#许可证)
 - [免责声明](#免责声明)
 
-> **v3.2.0 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
+> **v3.2.1 更新**：适配雨课堂 2026.11 改版。实测跑完一门 293 个学习单元的课程
 > （116 图文 + 43 视频 + 134 讨论，293/293 全部完成）。改动明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![界面截图](images/image.png)
@@ -139,49 +139,34 @@
 在浏览器控制台执行（作用于当前域名）：
 
 ```js
-localStorage.setItem('ykt_mode', 'fast')      // 只刷图文/讨论，视频留给串行
-localStorage.setItem('ykt_exam_mode', 'on')   // 遇到考试时自动帮你打开考试系统
+localStorage.setItem('ykt_mode', 'fast')   // 只刷图文/讨论，视频留给串行
 ```
 
 | 键 | 取值 | 作用 |
 |---|---|---|
 | `ykt_mode` | `all`（默认）/ `fast` | `fast` 只处理秒级条目，并发更高效 |
-| `ykt_exam_mode` | `off`（默认）/ `on` | `on` 时自动打开考试系统（仍需人工作答） |
 
 ---
 
-## 关于考试
+## 考试：不支持
 
-**脚本不自动作答考试。** 考试在独立的考试系统中进行，脚本只负责帮你打开，答题与交卷需要人工完成。
+**本脚本不实现任何考试相关的功能**，不会进入考试、不会作答、也不会交卷。
 
-脚本对考试只做两件事：
-
-- 识别考试项，**默认停在「考生须知」页不动**（不消耗任何作答机会）
-- 设 `ykt_exam_mode=on` 时，帮你打开考试系统，然后提示你人工作答
-
-> 打开考试页**不会**消耗作答机会，只有点「开始答题」→「开始」才真正开始。
-> 刷课流程经过考试项会自动跳过。
-
-技术细节与实测结论见 [docs/exam.md](docs/exam.md)。
+刷课流程遇到考试项（课程目录里带「考试」图标的那一类）时会**自动跳过**，只打印一行日志说明。
+考试请自行在雨课堂里完成。
 
 ---
 
-## 高级：tools/ 外部自动化
+## 高级：多窗口命令行工具
 
-仓库里的 [tools/](tools/README.md) 提供两件事（需要 Node.js ≥ 22，无需 `npm install`）：
+面板里的多窗口开关已经能直接用。如果你想把窗口开到 6–8 个、并关掉浏览器对后台窗口的节流，
+可以用仓库里的 [tools/brush.mjs](tools/README.md)（需要 Node.js ≥ 22，无需 `npm install`）：
 
 ```bash
-# 多窗口并发刷课
 node tools/brush.mjs --course <课堂id> --windows 4 --minutes 30
-
-# 考试工具：列考试 / 开始并导出题目 / 作答交卷 / 查分
-node tools/exam.mjs list   --course <课堂id>
-node tools/exam.mjs open   --course <课堂id> --leaf <leafId>
-node tools/exam.mjs answer --id <leafTypeId> --answers answers.json
-node tools/exam.mjs verify --id <leafTypeId>
 ```
 
-前置条件与详细用法见 [tools/README.md](tools/README.md)。
+前置条件（必须以调试模式启动浏览器）与详细用法见 [tools/README.md](tools/README.md)。
 
 ---
 
@@ -219,8 +204,7 @@ LICENSE                 GPL-3.0
 package.json            开发脚本（npm run check / test:fixtures）
 .editorconfig           编辑器统一配置
 .gitattributes          LF 换行统一
-docs/exam.md            考试系统的实测结论与 DOM 结构
-tools/                  外部自动化工具（可选）
+tools/                  多窗口命令行工具（可选）
 test/                   fixture 回归测试
 images/                 截图
 .github/                Issue / PR 模板与 CI

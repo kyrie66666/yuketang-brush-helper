@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         雨课堂刷课助手
 // @namespace    http://tampermonkey.net/
-// @version      3.2.0
+// @version      3.2.1
 // @description  针对雨课堂视频进行自动播放，配置AI自动答题
 // @author       风之子
 // @license      GPL3
@@ -32,7 +32,7 @@
 
   // ---- 脚本配置，用户可修改 ----
   const Config = {
-    version: '3.2.0',     // 版本号
+    version: '3.2.1',     // 版本号
     playbackRate: 2,      // 视频播放倍速
     pptInterval: 3000,    // ppt翻页间隔
     storageKeys: {        // 使用者勿动
@@ -1309,31 +1309,6 @@
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
-    },
-    // ---- 考试（quiz）：新版 ai-workspace 路由 ----
-    // 结构：/ai-workspace/lms-graph/<cid>/quiz/<leafId>
-    //   → iframe.quiz-iframe src=/v2/web/iframe-quiz/<cid>/<leafTypeId>
-    //   → 未开始时是「考生须知」页，有「开始答题」按钮（.btn-quiz），题目一个都不加载
-    //   → 点了「开始答题」才算开始（会消耗一次作答机会）
-    // 默认只识别不开始；需要 localStorage 设 ykt_exam_mode=on 才会自动开始作答。
-    getQuizDocument() {
-      const frame = document.querySelector('iframe.quiz-iframe')
-        || [...document.querySelectorAll('iframe')].find(f => /iframe-quiz/.test(f.src || ''));
-      if (!frame) return null;
-      try {
-        const doc = frame.contentDocument;
-        return doc && doc.body ? doc : null;
-      } catch (_) {
-        return null;
-      }
-    },
-    getQuizStartButton(doc) {
-      if (!doc) return null;
-      const nodes = [...doc.querySelectorAll('.btn-quiz, .btn__group, button, [role="button"]')];
-      return nodes.find(el => /开始答题/.test((el.innerText || '').trim())) || null;
-    },
-    examModeOn() {
-      try { return localStorage.getItem('ykt_exam_mode') === 'on'; } catch (_) { return false; }
     },
     getAllScourse() { // 获得ai-workspace的课程列表
       const list = document?.querySelectorAll(".nav-item-leaf-box")
@@ -2696,44 +2671,6 @@ ${ocrText}
       return submitted;
     }
 
-
-    // ---- 考试（quiz）：人工辅助模式 ----
-    // 实测（2026.11）：
-    //   - 考试项在 /ai-workspace/lms-graph/<cid>/quiz/<leafId>，内容在 iframe.quiz-iframe
-    //   - 未开始时是「考生须知」页，题目一个都不加载，点「开始答题」才真正开始
-    //   - 点「开始答题」会**在新标签页**打开独立考试系统 examination.xuetangx.com
-    //     （不是 yuketang.cn，脚本的 @match 不覆盖；页面内还嵌了腾讯验证码）
-    //   - 因此脚本无法在考试页自动作答，这里只做「识别 + 可选地帮你打开考试系统」，
-    //     真正的作答与交卷由人工完成。
-    async handleQuiz(route) {
-      const title = AiWorkspace.getActiveLeafTitle() || `考试 ${route.leafId}`;
-      const doc = await Utils.poll(() => AiWorkspace.getQuizDocument(), { interval: 500, timeout: 20000 })
-        ? AiWorkspace.getQuizDocument() : null;
-      if (!doc) {
-        this.panel.log(`${title}：未找到考试 iframe，跳过`);
-        return true;
-      }
-
-      const startBtn = AiWorkspace.getQuizStartButton(doc);
-      if (!startBtn) {
-        this.panel.log(`${title}：似乎已在作答中，脚本不介入（请人工完成并交卷）`);
-        return true;
-      }
-
-      if (!AiWorkspace.examModeOn()) {
-        this.panel.log(`${title}：停在考生须知页，未开始（开启 ykt_exam_mode=on 可自动打开考试系统）`);
-        await Utils.sleep(800);
-        return true;
-      }
-
-      // 只负责把考试系统打开，不作答
-      this.panel.log(`${title}：正在打开考试系统…`);
-      startBtn.click();
-      await Utils.sleep(1500);
-      this.panel.warn('考试系统已在新标签页打开，请人工作答并交卷（脚本不参与答题）');
-      return true;
-    }
-
     // 直接在ai-workspace页面处理课程的逻辑
     async handleNext(count) {
       if (!this.source || !this.source.length) {
@@ -2768,8 +2705,6 @@ ${ocrText}
         ok = await this.handleMedia(route);
       } else if (route.type === 'forum') {
         ok = await this.handleForum(route);
-      } else if (route.type === 'quiz') {
-        ok = await this.handleQuiz(route);
       } else if (route.type === 'exercise') {
         ok = await this.handleExercise(route);
       } else {
