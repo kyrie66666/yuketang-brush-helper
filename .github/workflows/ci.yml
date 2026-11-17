@@ -35,9 +35,14 @@ jobs:
           head -n 30 yuketang.user.js | grep -q '@match' || { echo "缺少 @match"; exit 1; }
           echo "元数据完整"
 
-      - name: 校验脚本版本与 CHANGELOG 一致
+      - name: 校验版本号一致（脚本 / package.json / CHANGELOG）
         run: |
           VER=$(grep -oP "@version\s+\K[0-9.]+" yuketang.user.js)
           echo "脚本版本: $VER"
+
+          PKG=$(node -p "require('./package.json').version")
+          echo "package.json: $PKG"
+          [ "$VER" = "$PKG" ] || { echo "package.json 与脚本版本不一致"; exit 1; }
+
           grep -q "## \[$VER\]" CHANGELOG.md || { echo "CHANGELOG.md 缺少 $VER 的条目"; exit 1; }
-          echo "版本号与 CHANGELOG 一致"
+          echo "版本号三处一致"

@@ -1,11 +1,30 @@
 # 雨课堂刷课助手
 
+[![CI](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml/badge.svg)](https://github.com/kyrie66666/yuketang-jiaoben/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![version](https://img.shields.io/badge/version-3.1.0-blue.svg)](CHANGELOG.md)
+
 一个面向[雨课堂](https://www.yuketang.cn)的用户脚本（Userscript）：自动播放课程视频/音频、
 翻阅图文与课件、自动回复讨论，可选接入大模型自动做作业。
 
 - **版本**：v3.1.0（适配 2026.11 改版）
 - **许可证**：[GPL-3.0](LICENSE)
 - **适用**：Tampermonkey / Violentmonkey 等脚本管理器（Chrome、Edge、Firefox）
+- **下载**：[Releases](https://github.com/kyrie66666/yuketang-jiaoben/releases/latest)
+
+## 目录
+
+- [功能](#功能)
+- [安装](#安装)
+- [使用](#使用)
+- [关于考试](#关于考试)
+- [高级：tools/ 外部自动化](#高级tools-外部自动化)
+- [常见问题](#常见问题)
+- [目录结构](#目录结构)
+- [开发与测试](#开发与测试)
+- [参与贡献](#参与贡献)
+- [许可证](#许可证)
+- [免责声明](#免责声明)
 
 > **v3.1.0 说明**
 > 雨课堂已把课程内容整体迁移到 `/ai-workspace/lms-graph/...` 路由，旧版选择器基本失效。
@@ -188,6 +207,9 @@ yuketang.user.js        用户脚本本体（唯一需要安装的文件）
 CHANGELOG.md            版本更新记录
 CONTRIBUTING.md         贡献指南
 LICENSE                 GPL-3.0
+package.json            开发脚本（npm run check / test:fixtures）
+.editorconfig           编辑器统一配置
+.gitattributes          LF 换行统一
 docs/exam.md            考试系统的实测结论与 DOM 结构
 tools/                  外部自动化工具（可选）
 test/                   fixture 回归测试
@@ -197,12 +219,16 @@ images/                 截图
 
 ## 开发与测试
 
-脚本为单文件、无构建步骤。改动后可直接用 `node --check yuketang.user.js` 校验语法。
+脚本为**单文件、无构建步骤**，不需要 
+pm install。
 
-回归测试（需要本机有可远程调试的浏览器）：
+常用命令（根目录下的 package.json 提供）：
 
 ```bash
-node test/run-fixtures.mjs --port 9222
+npm run check           # 语法校验（用户脚本 + 测试 + 工具）
+npm run test:fixtures   # 回归测试，需本机有可远程调试的浏览器
+npm run brush -- --course <id> --windows 4
+npm run exam  -- list --course <id>
 ```
 
 测试用本地 fixture 复刻现网的 forum / video / graph 三种页面结构，通过 CDP 注入脚本并断言行为。

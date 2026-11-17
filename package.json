@@ -1,0 +1,23 @@
+{
+  "name": "yuketang-jiaoben",
+  "version": "3.1.0",
+  "private": true,
+  "description": "雨课堂刷课助手 —— Tampermonkey 用户脚本 + 外部自动化工具",
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node --check yuketang.user.js && node --check test/run-fixtures.mjs && node --check tools/cdp.mjs && node --check tools/brush.mjs && node --check tools/exam.mjs",
+    "test": "npm run check",
+    "test:fixtures": "node test/run-fixtures.mjs --port 9222",
+    "brush": "node tools/brush.mjs",
+    "exam": "node tools/exam.mjs"
+  },
+  "keywords": [
+    "userscript",
+    "tampermonkey",
+    "yuketang",
+    "xuetangx"
+  ]
+}
